@@ -1,0 +1,147 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at")
+
+  // Owned items
+  tasks      Task[]
+  projects   Project[]
+  categories Category[]
+
+  // Activity
+  taskUpdates TaskUpdate[]
+  timeLogs    TimeLog[]
+
+  @@map("users")
+}
+
+model Task {
+  id          String     @id @default(cuid())
+  title       String
+  description String?
+  status      TaskStatus @default(TODO)
+  priority    Priority   @default(MEDIUM)
+  dueDate     DateTime?  @map("due_date")
+  isShared    Boolean    @default(false) @map("is_shared")
+  createdAt   DateTime   @default(now()) @map("created_at")
+  updatedAt   DateTime   @updatedAt @map("updated_at")
+
+  ownerId String @map("owner_id")
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  projects    TaskProject[]
+  categories  TaskCategory[]
+  updates     TaskUpdate[]
+  timeLogs    TimeLog[]
+
+  @@map("tasks")
+}
+
+model Project {
+  id          String  @id @default(cuid())
+  name        String
+  description String?
+  color       String  @default("#6366f1")
+  isShared    Boolean @default(false) @map("is_shared")
+  createdAt   DateTime @default(now()) @map("created_at")
+
+  ownerId String @map("owner_id")
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  tasks TaskProject[]
+
+  @@map("projects")
+}
+
+model Category {
+  id       String  @id @default(cuid())
+  name     String
+  color    String  @default("#f59e0b")
+  isShared Boolean @default(false) @map("is_shared")
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ownerId String @map("owner_id")
+  owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  tasks TaskCategory[]
+
+  @@map("categories")
+}
+
+// Many-to-many: Task <-> Project
+model TaskProject {
+  taskId    String @map("task_id")
+  projectId String @map("project_id")
+
+  task    Task    @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, projectId])
+  @@map("task_projects")
+}
+
+// Many-to-many: Task <-> Category
+model TaskCategory {
+  taskId     String @map("task_id")
+  categoryId String @map("category_id")
+
+  task     Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  category Category @relation(fields: [categoryId], references: [id], onDelete: Cascade)
+
+  @@id([taskId, categoryId])
+  @@map("task_categories")
+}
+
+// Append-only notes log per task
+model TaskUpdate {
+  id        String   @id @default(cuid())
+  content   String
+  createdAt DateTime @default(now()) @map("created_at")
+
+  taskId String @map("task_id")
+  userId String @map("user_id")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("task_updates")
+}
+
+// Time logging per task
+model TimeLog {
+  id              String   @id @default(cuid())
+  durationMinutes Int      @map("duration_minutes")
+  description     String?
+  loggedAt        DateTime @default(now()) @map("logged_at")
+
+  taskId String @map("task_id")
+  userId String @map("user_id")
+
+  task Task @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("time_logs")
+}
+
+enum TaskStatus {
+  TODO
+  IN_PROGRESS
+  DONE
+}
+
+enum Priority {
+  LOW
+  MEDIUM
+  HIGH
+}
