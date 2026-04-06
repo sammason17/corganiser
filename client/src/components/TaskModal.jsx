@@ -114,42 +114,51 @@ export default function TaskModal({ task, onClose, onSave, loading }) {
           </div>
 
           {/* Categories */}
-          {categories.length > 0 && (
-            <div>
-              <label className="label">Categories</label>
-              <div className="space-y-2">
-                {categories.map(parent => {
-                  const hasChildren = parent.children?.length > 0
-                  const catButton = (c) => (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => toggleId('categoryIds', c.id)}
-                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                        form.categoryIds.includes(c.id)
-                          ? 'text-white border-transparent'
-                          : 'bg-white text-gray-600 border-gray-300'
-                      }`}
-                      style={form.categoryIds.includes(c.id) ? { backgroundColor: c.color, borderColor: c.color } : {}}
-                    >
-                      {c.name}
-                    </button>
-                  )
-                  return (
+          {categories.length > 0 && (() => {
+            const catButton = (c) => (
+              <button
+                key={c.id}
+                type="button"
+                onClick={() => toggleId('categoryIds', c.id)}
+                className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                  form.categoryIds.includes(c.id)
+                    ? 'text-white border-transparent'
+                    : 'bg-white text-gray-600 border-gray-300'
+                }`}
+                style={form.categoryIds.includes(c.id) ? { backgroundColor: c.color, borderColor: c.color } : {}}
+              >
+                {c.name}
+              </button>
+            )
+            const withChildren = categories.filter(p => p.children?.length > 0)
+            const standalone = categories.filter(p => !p.children?.length)
+            return (
+              <div>
+                <label className="label">Categories</label>
+                <div className="space-y-2">
+                  {withChildren.map(parent => (
                     <div key={parent.id}>
-                      {hasChildren && (
-                        <p className="text-xs text-gray-400 font-medium mb-1">{parent.name}</p>
-                      )}
+                      <p className="text-xs text-gray-400 font-medium mb-1">{parent.name}</p>
                       <div className="flex flex-wrap gap-2">
                         {catButton(parent)}
-                        {parent.children?.map(child => catButton(child))}
+                        {parent.children.map(child => catButton(child))}
                       </div>
                     </div>
-                  )
-                })}
+                  ))}
+                  {standalone.length > 0 && (
+                    <div>
+                      {withChildren.length > 0 && (
+                        <p className="text-xs text-gray-400 font-medium mb-1">Other</p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {standalone.map(p => catButton(p))}
+                      </div>
+                    </div>
+                  )}
+                </div>
               </div>
-            </div>
-          )}
+            )
+          })()}
 
           <div className="flex items-center gap-2">
             <input
