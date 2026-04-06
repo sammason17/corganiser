@@ -13,7 +13,7 @@ const PRIORITY_STYLES = {
   HIGH:   { label: 'High',   cls: 'bg-red-100 text-red-700' },
 }
 
-export default function TaskCard({ task }) {
+export default function TaskCard({ task, innerRef, draggableProps, dragHandleProps }) {
   const status = STATUS_STYLES[task.status] || STATUS_STYLES.TODO
   const priority = PRIORITY_STYLES[task.priority] || PRIORITY_STYLES.MEDIUM
 
@@ -23,6 +23,9 @@ export default function TaskCard({ task }) {
 
   return (
     <Link
+      ref={innerRef}
+      {...draggableProps}
+      {...dragHandleProps}
       to={`/tasks/${task.id}`}
       className="card p-4 block hover:shadow-md transition-shadow group"
     >

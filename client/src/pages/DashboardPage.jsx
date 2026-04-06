@@ -1,9 +1,13 @@
 import { useState } from 'react'
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
+import { useQueryClient } from '@tanstack/react-query'
+import toast from 'react-hot-toast'
 import { useTasks, useCreateTask } from '../hooks/useTasks'
 import { useProjects } from '../hooks/useProjects'
 import { useCategories } from '../hooks/useCategories'
 import TaskCard from '../components/TaskCard'
 import TaskModal from '../components/TaskModal'
+import api from '../lib/api'
 
 const STATUS_COLUMNS = [
   { key: 'TODO',        label: 'To Do' },
@@ -20,10 +24,32 @@ export default function DashboardPage() {
   const { data: projects = [] } = useProjects()
   const { data: categories = [] } = useCategories()
   const createTask = useCreateTask()
+  const qc = useQueryClient()
 
   async function handleCreate(data) {
     await createTask.mutateAsync(data)
     setShowModal(false)
+  }
+
+  async function onDragEnd(result) {
+    const { draggableId, source, destination } = result
+    if (!destination || destination.droppableId === source.droppableId) return
+
+    const newStatus = destination.droppableId
+    const queryKey = ['tasks', filters]
+    const previous = qc.getQueryData(queryKey)
+
+    // Optimistic update
+    qc.setQueryData(queryKey, old =>
+      old?.map(t => t.id === draggableId ? { ...t, status: newStatus } : t)
+    )
+
+    try {
+      await api.put(`/tasks/${draggableId}`, { status: newStatus })
+    } catch {
+      qc.setQueryData(queryKey, previous)
+      toast.error('Failed to move task')
+    }
   }
 
   const tasksByStatus = STATUS_COLUMNS.reduce((acc, col) => {
@@ -133,28 +159,50 @@ export default function DashboardPage() {
 
       {/* Board view */}
       {!isLoading && view === 'board' && tasks.length > 0 && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-          {STATUS_COLUMNS.map(col => (
-            <div key={col.key}>
-              <div className="flex items-center gap-2 mb-3">
-                <h2 className="text-sm font-semibold text-gray-700">{col.label}</h2>
-                <span className="badge bg-gray-100 text-gray-600">
-                  {tasksByStatus[col.key]?.length || 0}
-                </span>
+        <DragDropContext onDragEnd={onDragEnd}>
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+            {STATUS_COLUMNS.map(col => (
+              <div key={col.key}>
+                <div className="flex items-center gap-2 mb-3">
+                  <h2 className="text-sm font-semibold text-gray-700">{col.label}</h2>
+                  <span className="badge bg-gray-100 text-gray-600">
+                    {tasksByStatus[col.key]?.length || 0}
+                  </span>
+                </div>
+                <Droppable droppableId={col.key}>
+                  {(provided, snapshot) => (
+                    <div
+                      ref={provided.innerRef}
+                      {...provided.droppableProps}
+                      className={`space-y-2 min-h-16 rounded-xl transition-colors ${
+                        snapshot.isDraggingOver ? 'bg-primary-50' : ''
+                      }`}
+                    >
+                      {tasksByStatus[col.key]?.map((task, index) => (
+                        <Draggable key={task.id} draggableId={task.id} index={index}>
+                          {(provided, snapshot) => (
+                            <TaskCard
+                              task={task}
+                              innerRef={provided.innerRef}
+                              draggableProps={provided.draggableProps}
+                              dragHandleProps={provided.dragHandleProps}
+                            />
+                          )}
+                        </Draggable>
+                      ))}
+                      {provided.placeholder}
+                      {tasksByStatus[col.key]?.length === 0 && !snapshot.isDraggingOver && (
+                        <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-400">
+                          No tasks
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Droppable>
               </div>
-              <div className="space-y-2">
-                {tasksByStatus[col.key]?.map(task => (
-                  <TaskCard key={task.id} task={task} />
-                ))}
-                {tasksByStatus[col.key]?.length === 0 && (
-                  <div className="border-2 border-dashed border-gray-200 rounded-xl p-4 text-center text-xs text-gray-400">
-                    No tasks
-                  </div>
-                )}
-              </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </DragDropContext>
       )}
 
       {/* List view */}
