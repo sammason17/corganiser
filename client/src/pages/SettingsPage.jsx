@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import { useAuth } from '../context/AuthContext'
+import { useNavigate } from 'react-router-dom'
 import api from '../lib/api'
 import toast from 'react-hot-toast'
 
@@ -61,7 +62,13 @@ function CalendarSection() {
 }
 
 export default function SettingsPage() {
-  const { user, updateUser } = useAuth()
+  const { user, updateUser, logout } = useAuth()
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    logout()
+    navigate('/login')
+  }
 
   const [profileForm, setProfileForm] = useState({ name: user?.name || '', email: user?.email || '' })
   const [passwordForm, setPasswordForm] = useState({ currentPassword: '', newPassword: '', confirm: '' })
@@ -185,6 +192,15 @@ export default function SettingsPage() {
       </div>
 
       <CalendarSection />
+
+      {/* Sign out — visible on mobile where sidebar is hidden */}
+      <div className="card p-5 mt-4 md:hidden">
+        <h2 className="font-semibold text-gray-900 mb-1">Account</h2>
+        <p className="text-sm text-gray-500 mb-4">Signed in as {user?.email}</p>
+        <button onClick={handleLogout} className="btn-danger w-full justify-center">
+          Sign out
+        </button>
+      </div>
     </div>
   )
 }
