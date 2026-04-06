@@ -1,6 +1,7 @@
 import 'dotenv/config'
 import express from 'express'
 import cors from 'cors'
+import rateLimit from 'express-rate-limit'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
@@ -71,9 +72,21 @@ const app = express()
 app.use(cors())
 app.use(express.json())
 
+// ── Rate limiting ─────────────────────────────────────────────────────────────
+// Limits brute-force attempts on public auth endpoints.
+// Note: uses an in-memory store — effective locally and per-instance on Vercel.
+// Vercel's network-layer DDoS protection covers volumetric attacks in production.
+const authLimiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { error: 'Too many attempts, please try again in 15 minutes' },
+})
+
 // ── AUTH ──────────────────────────────────────────────────────────────────────
 
-app.post('/api/auth/register', async (req, res) => {
+app.post('/api/auth/register', authLimiter, async (req, res) => {
   try {
     const { name, email, password, registrationCode } = req.body
     if (!name || !email || !password || !registrationCode)
@@ -98,7 +111,7 @@ app.post('/api/auth/register', async (req, res) => {
   }
 })
 
-app.post('/api/auth/login', async (req, res) => {
+app.post('/api/auth/login', authLimiter, async (req, res) => {
   try {
     const { email, password } = req.body
     if (!email || !password)

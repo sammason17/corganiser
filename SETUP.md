@@ -88,12 +88,21 @@ Or use Neon's dashboard to verify the tables were created.
 
 ---
 
+## Security
+
+### Rate limiting
+Login and register endpoints are rate-limited to **10 requests per IP per 15 minutes** using `express-rate-limit`. Exceeding the limit returns a `429 Too Many Requests` response.
+
+> **Vercel note:** The rate limiter uses an in-memory store, so counters reset per serverless function instance. It works reliably in local development and provides partial protection in production. Vercel's built-in network-layer DDoS protection handles large volumetric attacks in production.
+
+---
+
 ## API Summary
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | /api/auth/register | No | Register (requires invite code) |
-| POST | /api/auth/login | No | Login → returns JWT |
+| POST | /api/auth/register | No | Register (requires invite code) · rate limited |
+| POST | /api/auth/login | No | Login → returns JWT · rate limited |
 | PUT | /api/auth/update-password | Yes | Change password |
 | GET | /api/users/me | Yes | Get own profile |
 | PUT | /api/users/me | Yes | Update name/email |
