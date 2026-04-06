@@ -6,7 +6,7 @@ const router = express.Router()
 router.use(requireAuth)
 
 // ── Default seeds ─────────────────────────────────────────────────────────────
-const DEFAULT_CATEGORIES = ['Strength', 'Cardio', 'Mobility', 'HIIT', 'Flexibility']
+const DEFAULT_CATEGORIES = ['Strength', 'Cardio', 'Mobility', 'HIIT', 'Flexibility', 'Calisthenics']
 const DEFAULT_BODY_AREAS = ['Chest', 'Back', 'Shoulders', 'Arms', 'Legs', 'Core', 'Full Body']
 
 // ── Include helpers ───────────────────────────────────────────────────────────
