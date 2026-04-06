@@ -19,8 +19,8 @@ export default function Layout() {
 
   return (
     <div className="flex h-screen overflow-hidden bg-gray-50">
-      {/* Sidebar */}
-      <aside className="w-56 flex-shrink-0 bg-white border-r border-gray-200 flex flex-col">
+      {/* Sidebar — desktop only */}
+      <aside className="hidden md:flex w-56 flex-shrink-0 bg-white border-r border-gray-200 flex-col">
         {/* Logo */}
         <div className="h-16 flex items-center px-5 border-b border-gray-100">
           <span className="text-primary-600 font-bold text-lg tracking-tight">Organiser</span>
@@ -68,11 +68,30 @@ export default function Layout() {
       </aside>
 
       {/* Main content */}
-      <main className="flex-1 overflow-y-auto">
-        <div className="max-w-5xl mx-auto px-6 py-8">
+      <main className="flex-1 overflow-y-auto pb-16 md:pb-0">
+        <div className="max-w-5xl mx-auto px-4 md:px-6 py-5 md:py-8">
           <Outlet />
         </div>
       </main>
+
+      {/* Bottom tab bar — mobile only */}
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 flex md:hidden">
+        {navItems.map(({ to, label, icon }) => (
+          <NavLink
+            key={to}
+            to={to}
+            end={to === '/'}
+            className={({ isActive }) =>
+              `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+                isActive ? 'text-primary-600' : 'text-gray-400'
+              }`
+            }
+          >
+            <span className="text-xl leading-none">{icon}</span>
+            <span className="text-[10px] font-medium">{label}</span>
+          </NavLink>
+        ))}
+      </nav>
     </div>
   )
 }

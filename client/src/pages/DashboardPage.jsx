@@ -34,15 +34,15 @@ export default function DashboardPage() {
   return (
     <div>
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
+      <div className="flex items-center justify-between mb-5 gap-3">
+        <div className="min-w-0">
           <h1 className="text-xl font-bold text-gray-900">Dashboard</h1>
           <p className="text-sm text-gray-500 mt-0.5">
             {tasks.length} task{tasks.length !== 1 ? 's' : ''}
             {Object.keys(filters).length > 0 && ' (filtered)'}
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-1.5 flex-shrink-0">
           <button
             className={`btn-ghost text-xs px-2 py-1 ${view === 'board' ? 'bg-gray-100' : ''}`}
             onClick={() => setView('board')}
@@ -51,14 +51,14 @@ export default function DashboardPage() {
             className={`btn-ghost text-xs px-2 py-1 ${view === 'list' ? 'bg-gray-100' : ''}`}
             onClick={() => setView('list')}
           >List</button>
-          <button className="btn-primary" onClick={() => setShowModal(true)}>
-            + New task
+          <button className="btn-primary text-sm px-3 py-1.5" onClick={() => setShowModal(true)}>
+            + <span className="hidden sm:inline">New task</span><span className="sm:hidden">New</span>
           </button>
         </div>
       </div>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap gap-2 mb-5">
         <select
           className="input w-auto text-sm py-1.5"
           value={filters.status || ''}
