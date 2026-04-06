@@ -4,11 +4,21 @@ import { useCategories, useCreateCategory, useUpdateCategory, useDeleteCategory 
 
 const PRESET_COLORS = ['#f59e0b','#ef4444','#6366f1','#10b981','#3b82f6','#8b5cf6','#ec4899','#14b8a6']
 
-function CategoryForm({ initial, onSave, onCancel, loading }) {
-  const [form, setForm] = useState(initial || { name: '', color: '#f59e0b', isShared: false })
+function CategoryForm({ initial, parentName, parentId, onSave, onCancel, loading }) {
+  const [form, setForm] = useState(initial || { name: '', description: '', color: '#f59e0b', isShared: false })
+
+  function handleSubmit(e) {
+    e.preventDefault()
+    onSave({ ...form, ...(parentId !== undefined && { parentId }) })
+  }
 
   return (
-    <form onSubmit={e => { e.preventDefault(); onSave(form) }} className="space-y-3">
+    <form onSubmit={handleSubmit} className="space-y-3">
+      {parentName && (
+        <p className="text-xs text-gray-500">
+          Subcategory of <span className="font-semibold text-gray-700">{parentName}</span>
+        </p>
+      )}
       <div>
         <label className="label">Name *</label>
         <input
@@ -18,6 +28,16 @@ function CategoryForm({ initial, onSave, onCancel, loading }) {
           onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
           required
           autoFocus
+        />
+      </div>
+      <div>
+        <label className="label">Description</label>
+        <textarea
+          className="input resize-none"
+          rows={2}
+          placeholder="Optional — what is this category for?"
+          value={form.description || ''}
+          onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
         />
       </div>
       <div>
@@ -46,11 +66,69 @@ function CategoryForm({ initial, onSave, onCancel, loading }) {
       </div>
       <div className="flex gap-2">
         <button type="submit" className="btn-primary text-sm" disabled={loading}>
-          {loading ? 'Saving…' : initial ? 'Save changes' : 'Create category'}
+          {loading ? 'Saving…' : initial ? 'Save changes' : 'Create'}
         </button>
         <button type="button" className="btn-secondary text-sm" onClick={onCancel}>Cancel</button>
       </div>
     </form>
+  )
+}
+
+function CategoryRow({ cat, isChild, isOwner, onEdit, onDelete, onAddSub, editingId, showSubCreateFor, onSaveEdit, onSaveSubCreate, onCancelEdit, onCancelSub, updateLoading, createLoading }) {
+  const isEditing = editingId === cat.id
+
+  return (
+    <div
+      className={`card p-4 ${isChild ? 'border-l-4' : ''}`}
+      style={isChild ? { borderLeftColor: cat.parent?.color || '#e5e7eb' } : {}}
+    >
+      {isEditing ? (
+        <>
+          <p className="text-xs font-medium text-gray-500 mb-3">Edit {isChild ? 'subcategory' : 'category'}</p>
+          <CategoryForm
+            initial={cat}
+            onSave={data => onSaveEdit(cat.id, data)}
+            onCancel={onCancelEdit}
+            loading={updateLoading}
+          />
+        </>
+      ) : (
+        <div className="flex items-center justify-between gap-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <span
+              className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium text-white"
+              style={{ backgroundColor: cat.color }}
+            >
+              {cat.name}
+            </span>
+            {cat.isShared && <span className="badge bg-primary-100 text-primary-700">Shared</span>}
+            <span className="text-xs text-gray-400">{cat._count?.tasks || 0} task{cat._count?.tasks !== 1 ? 's' : ''}</span>
+          </div>
+          <div className="flex gap-1.5 flex-shrink-0">
+            {!isChild && isOwner && (
+              <button
+                className="btn-ghost text-xs py-1 px-2 text-primary-600"
+                onClick={() => onAddSub(cat.id)}
+              >
+                + Sub
+              </button>
+            )}
+            {isOwner && (
+              <>
+                <button className="btn-secondary text-xs py-1 px-2" onClick={() => onEdit(cat.id)}>Edit</button>
+                <button className="btn-danger text-xs py-1 px-2" onClick={() => onDelete(cat.id, isChild)}>Delete</button>
+              </>
+            )}
+          </div>
+        </div>
+      )}
+      {!isEditing && (
+        <div className="mt-1.5 space-y-0.5">
+          {cat.description && <p className="text-xs text-gray-500">{cat.description}</p>}
+          <p className="text-xs text-gray-400">Created by {cat.owner?.name}</p>
+        </div>
+      )}
+    </div>
   )
 }
 
@@ -62,11 +140,13 @@ export default function CategoriesPage() {
   const deleteCategory = useDeleteCategory()
 
   const [showCreate, setShowCreate] = useState(false)
+  const [showSubCreateFor, setShowSubCreateFor] = useState(null) // parent category id
   const [editingId, setEditingId] = useState(null)
 
   async function handleCreate(data) {
     await createCategory.mutateAsync(data)
     setShowCreate(false)
+    setShowSubCreateFor(null)
   }
 
   async function handleUpdate(id, data) {
@@ -74,20 +154,29 @@ export default function CategoriesPage() {
     setEditingId(null)
   }
 
-  async function handleDelete(id) {
-    if (!confirm('Delete this category? Tasks will not be deleted but will be unlinked.')) return
+  async function handleDelete(id, isChild) {
+    const msg = isChild
+      ? 'Delete this subcategory? Tasks will be unlinked.'
+      : 'Delete this category? Any subcategories will become top-level. Tasks will be unlinked.'
+    if (!confirm(msg)) return
     await deleteCategory.mutateAsync(id)
   }
+
+  const totalCount = categories.reduce((n, c) => n + 1 + (c.children?.length || 0), 0)
 
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
         <div>
           <h1 className="text-xl font-bold text-gray-900">Categories</h1>
-          <p className="text-sm text-gray-500 mt-0.5">Use categories like "Urgent", "Blocked", or "Review" across tasks</p>
+          <p className="text-sm text-gray-500 mt-0.5">
+            {totalCount} categor{totalCount !== 1 ? 'ies' : 'y'} · use them to group tasks across projects
+          </p>
         </div>
         {!showCreate && (
-          <button className="btn-primary" onClick={() => setShowCreate(true)}>+ New category</button>
+          <button className="btn-primary" onClick={() => { setShowCreate(true); setShowSubCreateFor(null) }}>
+            + New category
+          </button>
         )}
       </div>
 
@@ -111,44 +200,57 @@ export default function CategoriesPage() {
         </div>
       )}
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="space-y-3">
         {categories.map(cat => {
           const isOwner = cat.ownerId === user?.id
           return (
-            <div key={cat.id} className="card p-4">
-              {editingId === cat.id ? (
-                <>
-                  <h3 className="font-semibold text-gray-900 mb-3">Edit category</h3>
-                  <CategoryForm
-                    initial={cat}
-                    onSave={(data) => handleUpdate(cat.id, data)}
-                    onCancel={() => setEditingId(null)}
-                    loading={updateCategory.isPending}
-                  />
-                </>
-              ) : (
-                <div className="flex items-center justify-between gap-3">
-                  <div className="flex items-center gap-3">
-                    <span
-                      className="inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium text-white"
-                      style={{ backgroundColor: cat.color }}
-                    >
-                      {cat.name}
-                    </span>
-                    {cat.isShared && <span className="badge bg-primary-100 text-primary-700">Shared</span>}
-                    <span className="text-xs text-gray-400">{cat._count?.tasks || 0} task{cat._count?.tasks !== 1 ? 's' : ''}</span>
-                  </div>
-                  {isOwner && (
-                    <div className="flex gap-1.5">
-                      <button className="btn-secondary text-xs py-1 px-2" onClick={() => setEditingId(cat.id)}>Edit</button>
-                      <button className="btn-danger text-xs py-1 px-2" onClick={() => handleDelete(cat.id)}>Delete</button>
+            <div key={cat.id}>
+              <CategoryRow
+                cat={cat}
+                isChild={false}
+                isOwner={isOwner}
+                onEdit={id => { setEditingId(id); setShowSubCreateFor(null) }}
+                onDelete={handleDelete}
+                onAddSub={id => { setShowSubCreateFor(id); setShowCreate(false); setEditingId(null) }}
+                editingId={editingId}
+                showSubCreateFor={showSubCreateFor}
+                onSaveEdit={handleUpdate}
+                onCancelEdit={() => setEditingId(null)}
+                updateLoading={updateCategory.isPending}
+                createLoading={createCategory.isPending}
+              />
+
+              {/* Subcategories */}
+              {(cat.children?.length > 0 || showSubCreateFor === cat.id) && (
+                <div className="ml-6 mt-2 space-y-2">
+                  {cat.children?.map(child => (
+                    <CategoryRow
+                      key={child.id}
+                      cat={{ ...child, parent: cat }}
+                      isChild={true}
+                      isOwner={child.ownerId === user?.id}
+                      onEdit={id => { setEditingId(id); setShowSubCreateFor(null) }}
+                      onDelete={handleDelete}
+                      editingId={editingId}
+                      onSaveEdit={handleUpdate}
+                      onCancelEdit={() => setEditingId(null)}
+                      updateLoading={updateCategory.isPending}
+                    />
+                  ))}
+
+                  {showSubCreateFor === cat.id && (
+                    <div className="card p-4 border-l-4" style={{ borderLeftColor: cat.color }}>
+                      <CategoryForm
+                        parentId={cat.id}
+                        parentName={cat.name}
+                        onSave={handleCreate}
+                        onCancel={() => setShowSubCreateFor(null)}
+                        loading={createCategory.isPending}
+                      />
                     </div>
                   )}
                 </div>
               )}
-              {!editingId || editingId !== cat.id ? (
-                <p className="text-xs text-gray-400 mt-1.5 ml-0">Created by {cat.owner?.name}</p>
-              ) : null}
             </div>
           )
         })}

@@ -124,9 +124,7 @@ The feed works with any ICS-compatible calendar app (Apple Calendar, Google Cale
 | GET/PUT/DELETE | /api/tasks/:id | Yes | Read / update / delete task |
 | GET/POST | /api/tasks/:id/updates | Yes | Notes log |
 | GET/POST | /api/tasks/:id/time-logs | Yes | Time logging |
-| GET/POST | /api/projects | Yes | List / create projects |
-| GET/PUT/DELETE | /api/projects/:id | Yes | Manage project |
-| GET/POST | /api/categories | Yes | List / create categories |
+| GET/POST | /api/categories | Yes | List / create categories (with hierarchy) |
 | PUT/DELETE | /api/categories/:id | Yes | Manage category |
 | GET | /api/calendar/token | Yes | Generate a calendar feed token |
 | GET | /api/calendar/feed?token= | No* | ICS feed for calendar apps |

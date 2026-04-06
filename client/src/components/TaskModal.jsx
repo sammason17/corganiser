@@ -1,12 +1,10 @@
 import { useState, useEffect } from 'react'
-import { useProjects } from '../hooks/useProjects'
 import { useCategories } from '../hooks/useCategories'
 
 const STATUSES = ['TODO', 'IN_PROGRESS', 'DONE']
 const PRIORITIES = ['LOW', 'MEDIUM', 'HIGH']
 
 export default function TaskModal({ task, onClose, onSave, loading }) {
-  const { data: projects = [] } = useProjects()
   const { data: categories = [] } = useCategories()
 
   const [form, setForm] = useState({
@@ -16,7 +14,6 @@ export default function TaskModal({ task, onClose, onSave, loading }) {
     priority: 'MEDIUM',
     dueDate: '',
     isShared: false,
-    projectIds: [],
     categoryIds: [],
   })
 
@@ -29,7 +26,6 @@ export default function TaskModal({ task, onClose, onSave, loading }) {
         priority: task.priority || 'MEDIUM',
         dueDate: task.dueDate ? task.dueDate.slice(0, 10) : '',
         isShared: task.isShared || false,
-        projectIds: task.projects?.map(p => p.id) || [],
         categoryIds: task.categories?.map(c => c.id) || [],
       })
     }
@@ -117,50 +113,40 @@ export default function TaskModal({ task, onClose, onSave, loading }) {
             />
           </div>
 
-          {/* Projects */}
-          {projects.length > 0 && (
-            <div>
-              <label className="label">Projects</label>
-              <div className="flex flex-wrap gap-2">
-                {projects.map(p => (
-                  <button
-                    key={p.id}
-                    type="button"
-                    onClick={() => toggleId('projectIds', p.id)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      form.projectIds.includes(p.id)
-                        ? 'text-white border-transparent'
-                        : 'bg-white text-gray-600 border-gray-300'
-                    }`}
-                    style={form.projectIds.includes(p.id) ? { backgroundColor: p.color, borderColor: p.color } : {}}
-                  >
-                    {p.name}
-                  </button>
-                ))}
-              </div>
-            </div>
-          )}
-
           {/* Categories */}
           {categories.length > 0 && (
             <div>
               <label className="label">Categories</label>
-              <div className="flex flex-wrap gap-2">
-                {categories.map(c => (
-                  <button
-                    key={c.id}
-                    type="button"
-                    onClick={() => toggleId('categoryIds', c.id)}
-                    className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
-                      form.categoryIds.includes(c.id)
-                        ? 'text-white border-transparent'
-                        : 'bg-white text-gray-600 border-gray-300'
-                    }`}
-                    style={form.categoryIds.includes(c.id) ? { backgroundColor: c.color, borderColor: c.color } : {}}
-                  >
-                    {c.name}
-                  </button>
-                ))}
+              <div className="space-y-2">
+                {categories.map(parent => {
+                  const hasChildren = parent.children?.length > 0
+                  const catButton = (c) => (
+                    <button
+                      key={c.id}
+                      type="button"
+                      onClick={() => toggleId('categoryIds', c.id)}
+                      className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                        form.categoryIds.includes(c.id)
+                          ? 'text-white border-transparent'
+                          : 'bg-white text-gray-600 border-gray-300'
+                      }`}
+                      style={form.categoryIds.includes(c.id) ? { backgroundColor: c.color, borderColor: c.color } : {}}
+                    >
+                      {c.name}
+                    </button>
+                  )
+                  return (
+                    <div key={parent.id}>
+                      {hasChildren && (
+                        <p className="text-xs text-gray-400 font-medium mb-1">{parent.name}</p>
+                      )}
+                      <div className="flex flex-wrap gap-2">
+                        {catButton(parent)}
+                        {parent.children?.map(child => catButton(child))}
+                      </div>
+                    </div>
+                  )
+                })}
               </div>
             </div>
           )}

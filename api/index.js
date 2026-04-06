@@ -34,14 +34,12 @@ function requireAuth(req, res, next) {
 function shapeTask(task) {
   return {
     ...task,
-    projects: task.projects.map(tp => tp.project),
     categories: task.categories.map(tc => tc.category),
   }
 }
 
 const taskInclude = {
   owner: { select: { id: true, name: true } },
-  projects: { include: { project: { select: { id: true, name: true, color: true } } } },
   categories: { include: { category: { select: { id: true, name: true, color: true } } } },
   _count: { select: { updates: true, timeLogs: true } },
 }
@@ -53,17 +51,16 @@ async function getAccessibleTask(id, userId) {
   })
 }
 
-async function getAccessibleProject(id, userId) {
-  return prisma.project.findFirst({
-    where: { id, OR: [{ ownerId: userId }, { isShared: true }] },
-    include: { owner: { select: { id: true, name: true } }, _count: { select: { tasks: true } } },
-  })
-}
 
 async function getAccessibleCategory(id, userId) {
   return prisma.category.findFirst({
     where: { id, OR: [{ ownerId: userId }, { isShared: true }] },
-    include: { owner: { select: { id: true, name: true } }, _count: { select: { tasks: true } } },
+    include: {
+      owner: { select: { id: true, name: true } },
+      _count: { select: { tasks: true } },
+      children: { select: { id: true } },
+      parent: { select: { id: true, name: true } },
+    },
   })
 }
 
@@ -185,14 +182,13 @@ app.put('/api/users/me', requireAuth, async (req, res) => {
 
 app.get('/api/tasks', requireAuth, async (req, res) => {
   try {
-    const { status, priority, projectId, categoryId, shared } = req.query
+    const { status, priority, categoryId, shared } = req.query
     const userId = req.user.userId
     const where = {
       OR: [{ ownerId: userId }, { isShared: true }],
       ...(status && { status }),
       ...(priority && { priority }),
-      ...(projectId && { projects: { some: { projectId } } }),
-      ...(categoryId && { categories: { some: { categoryId } } }),
+      ...(categoryId && { categories: { some: { category: { OR: [{ id: categoryId }, { parentId: categoryId }] } } } }),
       ...(shared === 'true' && { isShared: true }),
       ...(shared === 'false' && { ownerId: userId, isShared: false }),
     }
@@ -210,7 +206,7 @@ app.get('/api/tasks', requireAuth, async (req, res) => {
 
 app.post('/api/tasks', requireAuth, async (req, res) => {
   try {
-    const { title, description, status, priority, dueDate, isShared, projectIds, categoryIds } = req.body
+    const { title, description, status, priority, dueDate, isShared, categoryIds } = req.body
     if (!title) return res.status(400).json({ error: 'title is required' })
     const task = await prisma.task.create({
       data: {
@@ -220,7 +216,6 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
         dueDate: dueDate ? new Date(dueDate) : null,
         isShared: isShared ?? false,
         ownerId: req.user.userId,
-        projects: projectIds?.length ? { create: projectIds.map(projectId => ({ projectId })) } : undefined,
         categories: categoryIds?.length ? { create: categoryIds.map(categoryId => ({ categoryId })) } : undefined,
       },
       include: taskInclude,
@@ -249,9 +244,8 @@ app.put('/api/tasks/:id', requireAuth, async (req, res) => {
     if (!task) return res.status(404).json({ error: 'Task not found' })
     if (task.ownerId !== req.user.userId)
       return res.status(403).json({ error: 'Only the task owner can edit this task' })
-    const { title, description, status, priority, dueDate, isShared, projectIds, categoryIds } = req.body
+    const { title, description, status, priority, dueDate, isShared, categoryIds } = req.body
     const updated = await prisma.$transaction(async (tx) => {
-      if (projectIds !== undefined) await tx.taskProject.deleteMany({ where: { taskId: task.id } })
       if (categoryIds !== undefined) await tx.taskCategory.deleteMany({ where: { taskId: task.id } })
       return tx.task.update({
         where: { id: task.id },
@@ -262,7 +256,6 @@ app.put('/api/tasks/:id', requireAuth, async (req, res) => {
           ...(priority !== undefined && { priority }),
           ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
           ...(isShared !== undefined && { isShared }),
-          ...(projectIds?.length && { projects: { create: projectIds.map(projectId => ({ projectId })) } }),
           ...(categoryIds?.length && { categories: { create: categoryIds.map(categoryId => ({ categoryId })) } }),
         },
         include: taskInclude,
@@ -363,83 +356,29 @@ app.post('/api/tasks/:id/time-logs', requireAuth, async (req, res) => {
   }
 })
 
-// ── PROJECTS ──────────────────────────────────────────────────────────────────
-
-app.get('/api/projects', requireAuth, async (req, res) => {
-  try {
-    const projects = await prisma.project.findMany({
-      where: { OR: [{ ownerId: req.user.userId }, { isShared: true }] },
-      orderBy: { createdAt: 'desc' },
-      include: { owner: { select: { id: true, name: true } }, _count: { select: { tasks: true } } },
-    })
-    return res.json(projects)
-  } catch (err) {
-    console.error('[GET /projects]', err)
-    return res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
-app.post('/api/projects', requireAuth, async (req, res) => {
-  try {
-    const { name, description, color, isShared } = req.body
-    if (!name) return res.status(400).json({ error: 'name is required' })
-    const project = await prisma.project.create({
-      data: { name, description, color: color || '#6366f1', isShared: isShared ?? false, ownerId: req.user.userId },
-      include: { owner: { select: { id: true, name: true } }, _count: { select: { tasks: true } } },
-    })
-    return res.status(201).json(project)
-  } catch (err) {
-    console.error('[POST /projects]', err)
-    return res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
-app.put('/api/projects/:id', requireAuth, async (req, res) => {
-  try {
-    const project = await getAccessibleProject(req.params.id, req.user.userId)
-    if (!project) return res.status(404).json({ error: 'Project not found' })
-    if (project.ownerId !== req.user.userId)
-      return res.status(403).json({ error: 'Only the project owner can edit this project' })
-    const { name, description, color, isShared } = req.body
-    const updated = await prisma.project.update({
-      where: { id: project.id },
-      data: {
-        ...(name !== undefined && { name }),
-        ...(description !== undefined && { description }),
-        ...(color !== undefined && { color }),
-        ...(isShared !== undefined && { isShared }),
-      },
-      include: { owner: { select: { id: true, name: true } }, _count: { select: { tasks: true } } },
-    })
-    return res.json(updated)
-  } catch (err) {
-    console.error('[PUT /projects/:id]', err)
-    return res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
-app.delete('/api/projects/:id', requireAuth, async (req, res) => {
-  try {
-    const project = await getAccessibleProject(req.params.id, req.user.userId)
-    if (!project) return res.status(404).json({ error: 'Project not found' })
-    if (project.ownerId !== req.user.userId)
-      return res.status(403).json({ error: 'Only the project owner can delete this project' })
-    await prisma.project.delete({ where: { id: project.id } })
-    return res.json({ message: 'Project deleted' })
-  } catch (err) {
-    console.error('[DELETE /projects/:id]', err)
-    return res.status(500).json({ error: 'Internal server error' })
-  }
-})
-
 // ── CATEGORIES ────────────────────────────────────────────────────────────────
+
+const categoryInclude = {
+  owner: { select: { id: true, name: true } },
+  _count: { select: { tasks: true } },
+  parent: { select: { id: true, name: true, color: true } },
+}
 
 app.get('/api/categories', requireAuth, async (req, res) => {
   try {
+    const userId = req.user.userId
+    const accessible = { OR: [{ ownerId: userId }, { isShared: true }] }
     const categories = await prisma.category.findMany({
-      where: { OR: [{ ownerId: req.user.userId }, { isShared: true }] },
+      where: { ...accessible, parentId: null },
       orderBy: { name: 'asc' },
-      include: { owner: { select: { id: true, name: true } }, _count: { select: { tasks: true } } },
+      include: {
+        ...categoryInclude,
+        children: {
+          where: accessible,
+          orderBy: { name: 'asc' },
+          include: categoryInclude,
+        },
+      },
     })
     return res.json(categories)
   } catch (err) {
@@ -450,11 +389,20 @@ app.get('/api/categories', requireAuth, async (req, res) => {
 
 app.post('/api/categories', requireAuth, async (req, res) => {
   try {
-    const { name, color, isShared } = req.body
+    const { name, description, color, isShared, parentId } = req.body
     if (!name) return res.status(400).json({ error: 'name is required' })
+    if (parentId) {
+      const parent = await getAccessibleCategory(parentId, req.user.userId)
+      if (!parent) return res.status(404).json({ error: 'Parent category not found' })
+      if (parent.parentId) return res.status(400).json({ error: 'Cannot nest more than 2 levels deep' })
+    }
     const category = await prisma.category.create({
-      data: { name, color: color || '#f59e0b', isShared: isShared ?? false, ownerId: req.user.userId },
-      include: { owner: { select: { id: true, name: true } }, _count: { select: { tasks: true } } },
+      data: {
+        name, description, color: color || '#f59e0b', isShared: isShared ?? false,
+        ownerId: req.user.userId,
+        ...(parentId && { parentId }),
+      },
+      include: { ...categoryInclude, children: { include: categoryInclude } },
     })
     return res.status(201).json(category)
   } catch (err) {
@@ -469,15 +417,16 @@ app.put('/api/categories/:id', requireAuth, async (req, res) => {
     if (!category) return res.status(404).json({ error: 'Category not found' })
     if (category.ownerId !== req.user.userId)
       return res.status(403).json({ error: 'Only the category owner can edit it' })
-    const { name, color, isShared } = req.body
+    const { name, description, color, isShared } = req.body
     const updated = await prisma.category.update({
       where: { id: category.id },
       data: {
         ...(name !== undefined && { name }),
+        ...(description !== undefined && { description }),
         ...(color !== undefined && { color }),
         ...(isShared !== undefined && { isShared }),
       },
-      include: { owner: { select: { id: true, name: true } }, _count: { select: { tasks: true } } },
+      include: { ...categoryInclude, children: { include: categoryInclude } },
     })
     return res.json(updated)
   } catch (err) {
@@ -492,6 +441,10 @@ app.delete('/api/categories/:id', requireAuth, async (req, res) => {
     if (!category) return res.status(404).json({ error: 'Category not found' })
     if (category.ownerId !== req.user.userId)
       return res.status(403).json({ error: 'Only the category owner can delete it' })
+    // Orphan any children before deleting so they become top-level
+    if (category.children?.length > 0) {
+      await prisma.category.updateMany({ where: { parentId: category.id }, data: { parentId: null } })
+    }
     await prisma.category.delete({ where: { id: category.id } })
     return res.json({ message: 'Category deleted' })
   } catch (err) {

@@ -5,7 +5,6 @@ import LoginPage from './pages/LoginPage'
 import RegisterPage from './pages/RegisterPage'
 import DashboardPage from './pages/DashboardPage'
 import TaskDetailPage from './pages/TaskDetailPage'
-import ProjectsPage from './pages/ProjectsPage'
 import CategoriesPage from './pages/CategoriesPage'
 import SettingsPage from './pages/SettingsPage'
 
@@ -30,7 +29,6 @@ export default function App() {
       <Route path="/" element={<RequireAuth><Layout /></RequireAuth>}>
         <Route index element={<DashboardPage />} />
         <Route path="tasks/:id" element={<TaskDetailPage />} />
-        <Route path="projects" element={<ProjectsPage />} />
         <Route path="categories" element={<CategoriesPage />} />
         <Route path="settings" element={<SettingsPage />} />
       </Route>

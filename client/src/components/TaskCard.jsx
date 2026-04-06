@@ -53,15 +53,6 @@ export default function TaskCard({ task, innerRef, draggableProps, dragHandlePro
           </span>
         ))}
 
-        {task.projects?.map(proj => (
-          <span
-            key={proj.id}
-            className="badge border"
-            style={{ borderColor: proj.color, color: proj.color }}
-          >
-            {proj.name}
-          </span>
-        ))}
       </div>
 
       <div className="mt-3 flex items-center justify-between text-xs text-gray-400">

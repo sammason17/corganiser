@@ -119,9 +119,6 @@ export default function TaskDetailPage() {
           {task.categories?.map(c => (
             <span key={c.id} className="badge text-white" style={{ backgroundColor: c.color }}>{c.name}</span>
           ))}
-          {task.projects?.map(p => (
-            <span key={p.id} className="badge border" style={{ borderColor: p.color, color: p.color }}>{p.name}</span>
-          ))}
         </div>
 
         <div className="mt-4 flex flex-wrap gap-4 text-xs text-gray-500">

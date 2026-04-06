@@ -3,7 +3,6 @@ import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd'
 import { useQueryClient } from '@tanstack/react-query'
 import toast from 'react-hot-toast'
 import { useTasks, useCreateTask } from '../hooks/useTasks'
-import { useProjects } from '../hooks/useProjects'
 import { useCategories } from '../hooks/useCategories'
 import TaskCard from '../components/TaskCard'
 import TaskModal from '../components/TaskModal'
@@ -21,7 +20,6 @@ export default function DashboardPage() {
   const [view, setView] = useState('board') // 'board' | 'list'
 
   const { data: tasks = [], isLoading } = useTasks(filters)
-  const { data: projects = [] } = useProjects()
   const { data: categories = [] } = useCategories()
   const createTask = useCreateTask()
   const qc = useQueryClient()
@@ -107,17 +105,6 @@ export default function DashboardPage() {
           <option value="LOW">Low</option>
         </select>
 
-        {projects.length > 0 && (
-          <select
-            className="input w-auto text-sm py-1.5"
-            value={filters.projectId || ''}
-            onChange={e => setFilters(f => ({ ...f, projectId: e.target.value || undefined }))}
-          >
-            <option value="">All projects</option>
-            {projects.map(p => <option key={p.id} value={p.id}>{p.name}</option>)}
-          </select>
-        )}
-
         {categories.length > 0 && (
           <select
             className="input w-auto text-sm py-1.5"
@@ -125,7 +112,14 @@ export default function DashboardPage() {
             onChange={e => setFilters(f => ({ ...f, categoryId: e.target.value || undefined }))}
           >
             <option value="">All categories</option>
-            {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+            {categories.map(c => (
+              <optgroup key={c.id} label={c.name}>
+                <option value={c.id}>{c.name} (+ subcategories)</option>
+                {c.children?.map(child => (
+                  <option key={child.id} value={child.id}>{child.name}</option>
+                ))}
+              </optgroup>
+            ))}
           </select>
         )}
 
