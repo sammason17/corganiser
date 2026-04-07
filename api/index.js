@@ -502,6 +502,27 @@ app.get('/api/calendar/feed', async (req, res) => {
       return (str || '').replace(/\\/g, '\\\\').replace(/;/g, '\\;').replace(/,/g, '\\,').replace(/\n/g, '\\n')
     }
 
+    // RFC 5545: fold lines longer than 75 octets with CRLF + single space
+    function foldLine(line) {
+      const bytes = Buffer.from(line, 'utf8')
+      if (bytes.length <= 75) return line
+      const parts = []
+      let pos = 0
+      let first = true
+      while (pos < bytes.length) {
+        const limit = first ? 75 : 74 // continuation lines have 1 char indent
+        let chunk = bytes.slice(pos, pos + limit)
+        // avoid splitting a multi-byte UTF-8 sequence
+        while (chunk.length > 0 && (chunk[chunk.length - 1] & 0xc0) === 0x80) {
+          chunk = chunk.slice(0, chunk.length - 1)
+        }
+        parts.push((first ? '' : ' ') + chunk.toString('utf8'))
+        pos += chunk.length
+        first = false
+      }
+      return parts.join('\r\n')
+    }
+
     const stamp = icsNow()
 
     const events = tasks.map(task => {
@@ -520,7 +541,7 @@ app.get('/api/calendar/feed', async (req, res) => {
         task.description ? `DESCRIPTION:${escapeIcs(task.description)}` : null,
         `STATUS:${STATUS_MAP[task.status] || 'NEEDS-ACTION'}`,
         'END:VEVENT',
-      ].filter(Boolean).join('\r\n')
+      ].filter(Boolean).map(foldLine).join('\r\n')
     })
 
     const ics = [
@@ -530,10 +551,11 @@ app.get('/api/calendar/feed', async (req, res) => {
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'X-WR-CALNAME:My Tasks',
-      'X-WR-CALDESC:Tasks with due dates from Organiser App',
+      'REFRESH-INTERVAL;VALUE=DURATION:PT1H',
+      'X-PUBLISHED-TTL:PT1H',
       ...events,
       'END:VCALENDAR',
-    ].join('\r\n')
+    ].map(foldLine).join('\r\n') + '\r\n'
 
     res.setHeader('Content-Type', 'text/calendar; charset=utf-8')
     res.setHeader('Content-Disposition', 'inline; filename="tasks.ics"')
