@@ -1,6 +1,6 @@
-# Organiser App
+# My Life
 
-A personal organiser for two users, built with React, Node/Express, and PostgreSQL (Neon). Tasks and categories are private by default and can be selectively shared between users. Includes a full workout planner module.
+A personal life organiser built with React, Node/Express, and PostgreSQL (Neon). Manage tasks, track time, plan workouts, and subscribe to a live calendar feed, all in one place. Deploy your own instance, set a registration code, and share it with whoever you want. Tasks and categories are private by default and can be selectively shared between users.
 
 ## Stack
 

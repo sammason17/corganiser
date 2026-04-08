@@ -1,4 +1,4 @@
-# Organiser App — Setup Guide
+# My Life — Setup Guide
 
 ## Prerequisites
 - Node.js v18+
@@ -62,7 +62,7 @@ git init
 git add .
 git commit -m "Initial commit"
 # Create a repo on GitHub, then:
-git remote add origin https://github.com/YOUR_USERNAME/organiser-app.git
+git remote add origin https://github.com/YOUR_USERNAME/my-life.git
 git push -u origin main
 ```
 
