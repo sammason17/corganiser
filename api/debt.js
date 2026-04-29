@@ -28,7 +28,7 @@ router.get('/cards', async (req, res) => {
 
 router.post('/cards', async (req, res) => {
   try {
-    const { name, totalDebt, apr, monthlyPayment, balanceTransfers = [] } = req.body
+    const { name, totalDebt, apr, monthlyPayment, paymentDate, balanceTransfers = [] } = req.body
     
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' })
 
@@ -39,11 +39,13 @@ router.post('/cards', async (req, res) => {
           totalDebt: Number(totalDebt) || 0,
           apr: Number(apr) || 0,
           monthlyPayment: Number(monthlyPayment) || 0,
+          paymentDate: Number(paymentDate) || 1,
           ownerId: req.user.userId,
           balanceTransfers: {
             create: balanceTransfers.map(bt => ({
               amount: Number(bt.amount) || 0,
-              expiresInMonths: Number(bt.expiresInMonths) || 0
+              endDate: new Date(bt.endDate),
+              postOfferPayment: bt.postOfferPayment ? Number(bt.postOfferPayment) : null
             }))
           }
         },
@@ -61,7 +63,7 @@ router.post('/cards', async (req, res) => {
 
 router.put('/cards/:id', async (req, res) => {
   try {
-    const { name, totalDebt, apr, monthlyPayment, balanceTransfers = [] } = req.body
+    const { name, totalDebt, apr, monthlyPayment, paymentDate, balanceTransfers = [] } = req.body
     
     const existing = await prisma.debtCard.findUnique({ where: { id: req.params.id } })
     if (!existing) return res.status(404).json({ error: 'Not found' })
@@ -78,10 +80,12 @@ router.put('/cards/:id', async (req, res) => {
           ...(totalDebt !== undefined && { totalDebt: Number(totalDebt) }),
           ...(apr !== undefined && { apr: Number(apr) }),
           ...(monthlyPayment !== undefined && { monthlyPayment: Number(monthlyPayment) }),
+          ...(paymentDate !== undefined && { paymentDate: Number(paymentDate) }),
           balanceTransfers: {
             create: balanceTransfers.map(bt => ({
               amount: Number(bt.amount) || 0,
-              expiresInMonths: Number(bt.expiresInMonths) || 0
+              endDate: new Date(bt.endDate),
+              postOfferPayment: bt.postOfferPayment ? Number(bt.postOfferPayment) : null
             }))
           }
         },

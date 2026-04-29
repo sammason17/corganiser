@@ -10,10 +10,11 @@ import {
   ChevronDown,
   AlertCircle,
   History,
-  TrendingDown
+  TrendingDown,
+  Pencil
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'motion/react';
-import { getDebtCards, createDebtCard, deleteDebtCard } from '../../lib/debtApi';
+import { getDebtCards, createDebtCard, updateDebtCard, deleteDebtCard } from '../../lib/debtApi';
 
 // --- Constants ---
 const MAX_SIMULATION_MONTHS = 600; // 50 years sanity check
@@ -39,14 +40,33 @@ function simulatePayoff(card) {
   // Clone transfers to track their balances
   let activeTransfers = card.balanceTransfers.map(bt => ({
     ...bt,
-    currentBalance: bt.amount
+    currentBalance: bt.amount,
+    endDate: new Date(bt.endDate)
   }));
 
   const startDate = new Date();
+  let currentMonthlyPayment = card.monthlyPayment;
   
   while ((aprBalance > 0 || activeTransfers.some(t => t.currentBalance > 0)) && currentMonth < MAX_SIMULATION_MONTHS) {
     const simulationDate = new Date(startDate);
     simulationDate.setMonth(startDate.getMonth() + currentMonth);
+    // Align with payment date
+    if (card.paymentDate) {
+      const lastDayOfMonth = new Date(simulationDate.getFullYear(), simulationDate.getMonth() + 1, 0).getDate();
+      simulationDate.setDate(Math.min(card.paymentDate, lastDayOfMonth));
+    }
+
+    // Process expired transfers before calculating interest
+    const expired = activeTransfers.filter(t => simulationDate >= t.endDate && t.currentBalance > 0);
+    expired.forEach(t => {
+      aprBalance += t.currentBalance;
+      t.currentBalance = 0;
+      if (t.postOfferPayment && t.postOfferPayment > currentMonthlyPayment) {
+        currentMonthlyPayment = t.postOfferPayment;
+      }
+    });
+    
+    activeTransfers = activeTransfers.filter(t => simulationDate < t.endDate || t.currentBalance > 0);
 
     // 1. Calculate Monthly Interest on APR portion
     const monthlyRate = (card.apr / 100) / 12;
@@ -55,10 +75,10 @@ function simulatePayoff(card) {
     totalInterest += interest;
 
     // 2. Identify largest balance for payment allocation
-    let paymentRemaining = card.monthlyPayment;
+    let paymentRemaining = currentMonthlyPayment;
     
     // Safety check
-    if (aprBalance > 0 && card.monthlyPayment <= interest && currentMonth > 100) {
+    if (aprBalance > 0 && currentMonthlyPayment <= interest && currentMonth > 100) {
        return { steps, totalInterest, payoffDate: null, monthsToPayoff: currentMonth, isInfinite: true };
     }
 
@@ -86,18 +106,6 @@ function simulatePayoff(card) {
     }
 
     currentMonth++;
-    
-    activeTransfers.forEach(t => {
-      t.expiresInMonths -= 1;
-    });
-
-    const expired = activeTransfers.filter(t => t.expiresInMonths <= 0 && t.currentBalance > 0);
-    expired.forEach(t => {
-      aprBalance += t.currentBalance;
-      t.currentBalance = 0;
-    });
-    
-    activeTransfers = activeTransfers.filter(t => t.expiresInMonths > 0 || t.currentBalance > 0);
 
     const totalRemaining = aprBalance + activeTransfers.reduce((sum, t) => sum + t.currentBalance, 0);
 
@@ -106,7 +114,7 @@ function simulatePayoff(card) {
       date: simulationDate,
       totalRemaining: Math.max(0, totalRemaining),
       interestCharged: interest,
-      paymentApplied: card.monthlyPayment - paymentRemaining,
+      paymentApplied: currentMonthlyPayment - paymentRemaining,
       aprBalance,
       transferBalances: activeTransfers.map(t => t.currentBalance)
     });
@@ -116,6 +124,10 @@ function simulatePayoff(card) {
 
   const payoffDate = new Date(startDate);
   payoffDate.setMonth(startDate.getMonth() + currentMonth);
+  if (card.paymentDate) {
+    const lastDayOfMonth = new Date(payoffDate.getFullYear(), payoffDate.getMonth() + 1, 0).getDate();
+    payoffDate.setDate(Math.min(card.paymentDate, lastDayOfMonth));
+  }
 
   return {
     steps,
@@ -132,14 +144,35 @@ export default function DebtFlowPage() {
   const [isAdding, setIsAdding] = useState(false);
   const [loading, setLoading] = useState(true);
 
+  const [editingCardId, setEditingCardId] = useState(null);
+
   // Form State
   const [newCard, setNewCard] = useState({
     name: '',
     totalDebt: 0,
     apr: 18,
     monthlyPayment: 50,
+    paymentDate: 1,
     balanceTransfers: []
   });
+
+  const openAddModal = () => {
+    setEditingCardId(null);
+    setNewCard({ name: '', totalDebt: 0, apr: 18, monthlyPayment: 50, paymentDate: 1, balanceTransfers: [] });
+    setIsAdding(true);
+  };
+
+  const openEditModal = (card) => {
+    setEditingCardId(card.id);
+    setNewCard({
+      ...card,
+      balanceTransfers: card.balanceTransfers.map(bt => ({
+        ...bt,
+        endDate: new Date(bt.endDate).toISOString().split('T')[0] // Format for date input
+      }))
+    });
+    setIsAdding(true);
+  };
 
   useEffect(() => {
     loadCards();
@@ -156,15 +189,19 @@ export default function DebtFlowPage() {
     }
   };
 
-  const addCard = async () => {
+  const saveCard = async () => {
     if (!newCard.name) return;
     try {
-      const created = await createDebtCard(newCard);
-      setCards([created, ...cards]);
+      if (editingCardId) {
+        const updated = await updateDebtCard(editingCardId, newCard);
+        setCards(cards.map(c => c.id === editingCardId ? updated : c));
+      } else {
+        const created = await createDebtCard(newCard);
+        setCards([created, ...cards]);
+      }
       setIsAdding(false);
-      setNewCard({ name: '', totalDebt: 0, apr: 18, monthlyPayment: 50, balanceTransfers: [] });
     } catch (err) {
-      console.error('Failed to create card', err);
+      console.error('Failed to save card', err);
     }
   };
 
@@ -181,7 +218,8 @@ export default function DebtFlowPage() {
     const newBT = {
       id: crypto.randomUUID(),
       amount: 0,
-      expiresInMonths: 12
+      endDate: new Date().toISOString().split('T')[0],
+      postOfferPayment: ''
     };
     setNewCard({
       ...newCard,
@@ -225,7 +263,7 @@ export default function DebtFlowPage() {
         </div>
         <div className="flex items-center gap-6 text-sm font-medium">
           <button 
-            onClick={() => setIsAdding(true)}
+            onClick={openAddModal}
             className="bg-indigo-600 text-white px-4 py-2 rounded-lg hover:bg-indigo-700 transition-all shadow-sm flex items-center gap-2 active:scale-95"
           >
             <Plus size={16} strokeWidth={2.5} />
@@ -302,7 +340,7 @@ export default function DebtFlowPage() {
                   Join DebtFlow Pro and visualize exactly when you'll reach financial freedom with our smart tier-based calculation engine.
                 </p>
                 <button 
-                  onClick={() => setIsAdding(true)}
+                  onClick={openAddModal}
                   className="bg-indigo-600 text-white px-6 py-3 rounded-xl font-bold hover:bg-indigo-700 transition-all shadow-xl shadow-indigo-100 hover:scale-[1.02] active:scale-95 text-sm"
                 >
                   Create Your First Card
@@ -337,6 +375,13 @@ export default function DebtFlowPage() {
                           </div>
                         </div>
                         <div className="flex gap-2">
+                           <button 
+                            onClick={() => openEditModal(card)}
+                            className="p-2 text-slate-300 hover:text-indigo-600 hover:bg-indigo-50 rounded-xl transition-all"
+                            title="Edit Card"
+                          >
+                            <Pencil size={18} />
+                          </button>
                            <button 
                             onClick={() => removeCard(card.id)}
                             className="p-2 text-slate-300 hover:text-red-500 hover:bg-red-50 rounded-xl transition-all"
@@ -381,19 +426,20 @@ export default function DebtFlowPage() {
                             <thead>
                               <tr className="text-[9px] text-slate-400 font-extrabold border-b border-slate-100 uppercase tracking-widest">
                                 <th className="px-5 py-3">Amount</th>
-                                <th className="px-5 py-3">Est. Expiration</th>
-                                <th className="px-5 py-3">Duration</th>
+                                <th className="px-5 py-3">End Date</th>
+                                <th className="px-5 py-3">Post-Offer Payment</th>
                               </tr>
                             </thead>
                             <tbody className="text-sm">
                               {card.balanceTransfers.map((bt) => {
-                                const expDate = new Date();
-                                expDate.setMonth(expDate.getMonth() + bt.expiresInMonths);
+                                const expDate = new Date(bt.endDate);
                                 return (
                                   <tr key={bt.id} className="border-b border-slate-50 hover:bg-slate-50/50 transition-colors group">
                                     <td className="px-5 py-4 font-bold text-slate-800">{formatCurrency(bt.amount)}</td>
                                     <td className="px-5 py-4 text-slate-500 font-medium">{formatDate(expDate)}</td>
-                                    <td className="px-5 py-4 text-slate-500 font-medium">{bt.expiresInMonths} Months</td>
+                                    <td className="px-5 py-4 text-slate-500 font-medium">
+                                      {bt.postOfferPayment ? formatCurrency(bt.postOfferPayment) : '-'}
+                                    </td>
                                   </tr>
                                 );
                               })}
@@ -458,7 +504,7 @@ export default function DebtFlowPage() {
               <div className="p-6 md:p-8 overflow-y-auto custom-scrollbar">
                 <div className="flex justify-between items-center mb-6">
                   <div>
-                    <h2 className="text-xl font-bold tracking-tight">New Credit Account</h2>
+                    <h2 className="text-xl font-bold tracking-tight">{editingCardId ? 'Edit Credit Account' : 'New Credit Account'}</h2>
                     <p className="text-slate-500 text-[10px] font-medium uppercase tracking-widest mt-1">Configure debt parameters</p>
                   </div>
                   <button onClick={() => setIsAdding(false)} className="p-2 hover:bg-slate-50 rounded-full transition-colors text-slate-400">
@@ -499,14 +545,27 @@ export default function DebtFlowPage() {
                     </div>
                   </div>
 
-                  <div>
-                    <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-1.5 tracking-widest px-1">Monthly Repayment (£)</label>
-                    <input 
-                      type="number" 
-                      className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono font-bold text-indigo-600 text-sm"
-                      value={newCard.monthlyPayment}
-                      onChange={e => setNewCard({...newCard, monthlyPayment: e.target.value})}
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-1.5 tracking-widest px-1">Monthly Repayment (£)</label>
+                      <input 
+                        type="number" 
+                        className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono font-bold text-indigo-600 text-sm"
+                        value={newCard.monthlyPayment}
+                        onChange={e => setNewCard({...newCard, monthlyPayment: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-1.5 tracking-widest px-1">Payment Date (1-31)</label>
+                      <input 
+                        type="number" 
+                        min="1"
+                        max="31"
+                        className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono font-bold text-indigo-600 text-sm"
+                        value={newCard.paymentDate}
+                        onChange={e => setNewCard({...newCard, paymentDate: e.target.value})}
+                      />
+                    </div>
                   </div>
 
                   {/* Balance Transfers */}
@@ -534,12 +593,22 @@ export default function DebtFlowPage() {
                             />
                           </div>
                           <div className="flex-1">
-                            <p className="text-[8px] font-extrabold text-slate-400 uppercase mb-1">Months 0% APR</p>
+                            <p className="text-[8px] font-extrabold text-slate-400 uppercase mb-1">End Date</p>
+                            <input 
+                              type="date" 
+                              className="w-full bg-transparent border-b border-slate-200 focus:border-indigo-500 py-1 font-mono font-bold text-xs outline-none transition-colors text-slate-700"
+                              value={bt.endDate}
+                              onChange={e => updateTransferInDraft(bt.id, { endDate: e.target.value })}
+                            />
+                          </div>
+                          <div className="flex-1">
+                            <p className="text-[8px] font-extrabold text-slate-400 uppercase mb-1" title="What will you pay when this offer expires?">Post-Offer Pymt (£)</p>
                             <input 
                               type="number" 
+                              placeholder="Optional"
                               className="w-full bg-transparent border-b border-slate-200 focus:border-indigo-500 py-1 font-mono font-bold text-xs outline-none transition-colors"
-                              value={bt.expiresInMonths}
-                              onChange={e => updateTransferInDraft(bt.id, { expiresInMonths: e.target.value })}
+                              value={bt.postOfferPayment || ''}
+                              onChange={e => updateTransferInDraft(bt.id, { postOfferPayment: e.target.value })}
                             />
                           </div>
                           <button 
@@ -559,7 +628,7 @@ export default function DebtFlowPage() {
                   </div>
 
                   <button 
-                    onClick={addCard}
+                    onClick={saveCard}
                     className="w-full bg-indigo-600 hover:bg-slate-900 text-white py-3.5 rounded-xl font-black text-sm transition-all shadow-md shadow-indigo-100 hover:scale-[1.01] active:scale-[0.98] mt-2 flex items-center justify-center gap-2"
                   >
                     Confirm & Analyze Portfolio
