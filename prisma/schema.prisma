@@ -377,6 +377,7 @@ model AmexRecurring {
 
 model AmexGroceryShop {
   id              String   @id @default(cuid())
+  name            String   @default("Shop")
   date            DateTime @default(now())
   totalAmount     Float    @map("total_amount")
   myPortionAmount Float    @map("my_portion_amount")

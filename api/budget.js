@@ -256,9 +256,10 @@ router.delete('/amex/recurring/:id', async (req, res) => {
 
 router.post('/amex/grocery', async (req, res) => {
   try {
-    const { date, totalAmount, myPortionAmount } = req.body
+    const { name, date, totalAmount, myPortionAmount } = req.body
     const item = await prisma.amexGroceryShop.create({
       data: { 
+        name: name || 'Shop',
         date: date ? new Date(date) : new Date(), 
         totalAmount: Number(totalAmount) || 0, 
         myPortionAmount: Number(myPortionAmount) || 0, 
@@ -273,10 +274,11 @@ router.post('/amex/grocery', async (req, res) => {
 
 router.put('/amex/grocery/:id', async (req, res) => {
   try {
-    const { date, totalAmount, myPortionAmount } = req.body
+    const { name, date, totalAmount, myPortionAmount } = req.body
     const item = await prisma.amexGroceryShop.update({
       where: { id: req.params.id, ownerId: req.user.userId },
       data: { 
+        ...(name !== undefined && { name }),
         ...(date && { date: new Date(date) }), 
         totalAmount: Number(totalAmount) || 0, 
         myPortionAmount: Number(myPortionAmount) || 0 

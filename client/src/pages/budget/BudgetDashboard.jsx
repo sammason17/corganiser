@@ -74,14 +74,20 @@ export default function BudgetDashboard() {
   }).join(', ');
 
   // Amex Area calculations
+  // totalAmexExpenses = sum of expenses marked as Amex (e.g. £400 day-to-day budget)
   const totalAmexRecurring = useMemo(() => data.amexRecurring.reduce((s, i) => s + i.amount, 0), [data.amexRecurring]);
   const totalAmexExpenses = useMemo(() => data.expenses.filter(e => e.isAmex).reduce((s, e) => s + e.amount, 0), [data.expenses]);
-  
+
+  // Grocery totals
   const totalAmexGroceryFull = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.totalAmount, 0), [data.amexGrocery]);
   const totalAmexGroceryMine = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.myPortionAmount, 0), [data.amexGrocery]);
 
+  // Statement = recurring + amex expenses (day-to-day budget) + full grocery (partner pays back their share)
   const expectedAmexStatement = totalAmexRecurring + totalAmexExpenses + totalAmexGroceryFull;
+  // My true portion = recurring + amex expenses + only my grocery share
   const myAmexPortion = totalAmexRecurring + totalAmexExpenses + totalAmexGroceryMine;
+  // Warning: my grocery portion has eaten into (or exceeded) the day-to-day amex budget
+  const groceryOverBudget = totalAmexExpenses > 0 && totalAmexGroceryMine > totalAmexExpenses;
 
   if (loading) return <div className="p-8 text-center text-slate-500">Loading budget...</div>;
 
@@ -114,14 +120,22 @@ export default function BudgetDashboard() {
                     {formatCurrency(leftoverBudget)}
                   </div>
                   
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-2 gap-3">
                     <div>
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Total Income</p>
-                      <p className="font-mono text-lg">{formatCurrency(totalIncome)}</p>
+                      <p className="font-mono text-base">{formatCurrency(totalIncome)}</p>
                     </div>
                     <div>
                       <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Debt Payments</p>
-                      <p className="font-mono text-lg text-rose-400">-{formatCurrency(debtMonthlyTotal)}</p>
+                      <p className="font-mono text-base text-rose-400">-{formatCurrency(debtMonthlyTotal)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">My Share of Bills</p>
+                      <p className="font-mono text-base text-amber-400">-{formatCurrency(totalSharedBillsHalf)}</p>
+                    </div>
+                    <div>
+                      <p className="text-[10px] text-slate-500 font-bold uppercase tracking-widest mb-1">Monthly Expenses</p>
+                      <p className="font-mono text-base text-amber-400">-{formatCurrency(totalExpenses)}</p>
                     </div>
                   </div>
                 </div>
@@ -186,7 +200,7 @@ export default function BudgetDashboard() {
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
                   <Repeat size={12} /> Recurring Amex Payments
                 </h3>
-                <AmexRecurringList data={data.amexRecurring} refresh={fetchData} />
+                <AmexRecurringList data={data.amexRecurring} refresh={fetchData} amexExpenses={data.expenses.filter(e => e.isAmex)} />
               </div>
 
               <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
@@ -197,14 +211,47 @@ export default function BudgetDashboard() {
               </div>
             </div>
 
-            <div className="flex flex-col md:flex-row gap-6 justify-between bg-black/20 p-6 rounded-2xl border border-white/5">
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Statement Should Be</p>
-                <p className="text-3xl font-black font-mono text-white">{formatCurrency(expectedAmexStatement)}</p>
+            {groceryOverBudget && (
+              <div className="flex items-start gap-3 bg-red-500/20 border border-red-500/40 rounded-2xl p-4 mb-2">
+                <span className="text-red-400 text-lg mt-0.5">⚠️</span>
+                <div>
+                  <p className="text-red-300 font-black text-xs uppercase tracking-widest">Grocery budget exceeded!</p>
+                  <p className="text-red-200 text-xs mt-1">
+                    Your grocery portion this month is <span className="font-bold">{formatCurrency(totalAmexGroceryMine)}</span>, which exceeds your day-to-day Amex budget of <span className="font-bold">{formatCurrency(totalAmexExpenses)}</span>.
+                  </p>
+                </div>
               </div>
-              <div>
-                <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">My Personal Portion of Statement</p>
-                <p className="text-3xl font-black font-mono text-indigo-400">{formatCurrency(myAmexPortion)}</p>
+            )}
+
+            <div className="bg-black/20 p-6 rounded-2xl border border-white/5">
+              <div className="flex flex-col md:flex-row gap-8 mb-6">
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Statement Should Be</p>
+                  <p className="text-3xl font-black font-mono text-white">{formatCurrency(expectedAmexStatement)}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">My Personal Portion</p>
+                  <p className={`text-3xl font-black font-mono ${groceryOverBudget ? 'text-red-400' : 'text-indigo-400'}`}>{formatCurrency(myAmexPortion)}</p>
+                </div>
+              </div>
+              <div className="border-t border-white/10 pt-4 space-y-2">
+                <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-3">Breakdown</p>
+                <div className="flex justify-between text-xs text-indigo-200">
+                  <span>Recurring subscriptions</span>
+                  <span className="font-mono">{formatCurrency(totalAmexRecurring)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-indigo-200">
+                  <span>Day-to-day / Amex expenses budget</span>
+                  <span className="font-mono">{formatCurrency(totalAmexExpenses)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-indigo-200">
+                  <span>Grocery shop total (full)</span>
+                  <span className="font-mono">{formatCurrency(totalAmexGroceryFull)}</span>
+                </div>
+                <div className="flex justify-between text-xs text-emerald-300 border-t border-white/10 pt-2">
+                  <span>↳ My grocery portion</span>
+                  <span className="font-mono">{formatCurrency(totalAmexGroceryMine)} of {formatCurrency(totalAmexExpenses)} budget</span>
+                </div>
               </div>
             </div>
 
@@ -245,10 +292,10 @@ function IncomeList({ data, refresh }) {
   return (
     <div className="space-y-3">
       {data.map(i => (
-        <div key={i.id} className="flex justify-between items-center group">
-          <span className="text-sm font-bold text-slate-700">{i.name}</span>
-          <div className="flex items-center gap-3">
-            <span className="font-mono font-bold text-emerald-600">{formatCurrency(i.amount)}</span>
+        <div key={i.id} className="flex items-center gap-2 group min-w-0">
+          <span className="flex-1 text-sm font-bold text-slate-700 truncate min-w-0">{i.name}</span>
+          <div className="flex items-center gap-3 flex-shrink-0">
+            <span className="font-mono font-bold text-emerald-600 text-sm">{formatCurrency(i.amount)}</span>
             <button onClick={() => api.deleteIncome(i.id).then(refresh)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
               <Trash2 size={14} />
             </button>
@@ -256,9 +303,9 @@ function IncomeList({ data, refresh }) {
         </div>
       ))}
       <form onSubmit={handleAdd} className="flex gap-2 pt-2 border-t border-slate-100 mt-2">
-        <input placeholder="Name" value={name} onChange={e=>setName(e.target.value)} className="flex-1 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-emerald-500" />
-        <input placeholder="£" type="number" value={amount} onChange={e=>setAmount(e.target.value)} className="w-20 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-emerald-500" />
-        <button type="submit" className="bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700"><Plus size={14} /></button>
+        <input placeholder="Name" value={name} onChange={e=>setName(e.target.value)} className="min-w-0 flex-1 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-emerald-500" />
+        <input placeholder="£" type="number" value={amount} onChange={e=>setAmount(e.target.value)} className="w-20 flex-shrink-0 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none focus:border-emerald-500" />
+        <button type="submit" className="flex-shrink-0 bg-emerald-600 text-white p-2 rounded-lg hover:bg-emerald-700"><Plus size={14} /></button>
       </form>
     </div>
   );
@@ -400,7 +447,7 @@ function ExpenseList({ data, categories, refresh }) {
   );
 }
 
-function AmexRecurringList({ data, refresh }) {
+function AmexRecurringList({ data, refresh, amexExpenses }) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
 
@@ -413,6 +460,22 @@ function AmexRecurringList({ data, refresh }) {
 
   return (
     <div className="space-y-3">
+      {/* Read-only: Amex-flagged monthly expenses */}
+      {amexExpenses?.length > 0 && (
+        <>
+          {amexExpenses.map(e => (
+            <div key={e.id} className="flex justify-between items-center border-b border-white/5 pb-2 opacity-70">
+              <div className="flex items-center gap-2">
+                <span className="text-[8px] font-black uppercase tracking-widest text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded">Expense</span>
+                <span className="text-xs font-bold text-indigo-200">{e.name}</span>
+              </div>
+              <span className="font-mono text-xs text-indigo-200">{formatCurrency(e.amount)}</span>
+            </div>
+          ))}
+          <div className="border-b border-white/10" />
+        </>
+      )}
+      {/* Editable recurring Amex entries */}
       {data.map(i => (
         <div key={i.id} className="flex justify-between items-center group border-b border-white/5 pb-2">
           <span className="text-xs font-bold text-indigo-100">{i.name}</span>
@@ -434,45 +497,77 @@ function AmexRecurringList({ data, refresh }) {
 }
 
 function AmexGroceryList({ data, refresh }) {
+  const [name, setName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [myPortionAmount, setMyPortionAmount] = useState('');
+  const [editingId, setEditingId] = useState(null);
+  const [editName, setEditName] = useState('');
 
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!totalAmount) return;
-    await api.createAmexGrocery({ totalAmount, myPortionAmount: myPortionAmount || (totalAmount/2) });
-    setTotalAmount(''); setMyPortionAmount(''); refresh();
+    await api.createAmexGrocery({ name: name || 'Shop', totalAmount, myPortionAmount: myPortionAmount || (totalAmount/2) });
+    setName(''); setTotalAmount(''); setMyPortionAmount(''); refresh();
+  };
+
+  const handleRename = async (id) => {
+    if (!editName.trim()) return;
+    await api.updateAmexGrocery(id, { name: editName });
+    setEditingId(null); setEditName(''); refresh();
   };
 
   return (
     <div className="space-y-3">
       {data.map(i => (
         <div key={i.id} className="flex justify-between items-center group border-b border-white/5 pb-2">
-          <div>
-             <span className="text-xs font-bold text-indigo-100 block">Shop</span>
-             <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-300">
-               {new Date(i.date).toLocaleDateString('en-GB')}
-             </span>
+          <div className="flex-1 min-w-0 mr-3">
+            {editingId === i.id ? (
+              <form onSubmit={e => { e.preventDefault(); handleRename(i.id); }} className="flex gap-1">
+                <input
+                  autoFocus
+                  value={editName}
+                  onChange={e => setEditName(e.target.value)}
+                  className="flex-1 min-w-0 bg-white/10 text-white text-xs px-2 py-1 rounded border border-indigo-400 outline-none"
+                />
+                <button type="submit" className="text-indigo-400 hover:text-white text-xs px-2">Save</button>
+                <button type="button" onClick={() => setEditingId(null)} className="text-indigo-500 hover:text-white text-xs">✕</button>
+              </form>
+            ) : (
+              <button
+                onClick={() => { setEditingId(i.id); setEditName(i.name || 'Shop'); }}
+                className="text-left group/name"
+              >
+                <span className="text-xs font-bold text-indigo-100 block group-hover/name:text-indigo-300 transition-colors">
+                  {i.name || 'Shop'} <span className="opacity-0 group-hover/name:opacity-50 text-[9px]">✎</span>
+                </span>
+                <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-300">
+                  {new Date(i.date).toLocaleDateString('en-GB')}
+                </span>
+              </button>
+            )}
           </div>
-          <div className="flex items-center gap-4">
-             <div className="text-right">
-                <span className="text-[8px] text-indigo-300 uppercase block">Total</span>
-                <span className="font-mono text-xs text-white">{formatCurrency(i.totalAmount)}</span>
-             </div>
-             <div className="text-right border-l border-white/10 pl-3">
-                <span className="text-[8px] text-emerald-400 uppercase block">My Portion</span>
-                <span className="font-mono text-xs font-bold text-emerald-400">{formatCurrency(i.myPortionAmount)}</span>
-             </div>
+          <div className="flex items-center gap-4 flex-shrink-0">
+            <div className="text-right">
+              <span className="text-[8px] text-indigo-300 uppercase block">Total</span>
+              <span className="font-mono text-xs text-white">{formatCurrency(i.totalAmount)}</span>
+            </div>
+            <div className="text-right border-l border-white/10 pl-3">
+              <span className="text-[8px] text-emerald-400 uppercase block">My Portion</span>
+              <span className="font-mono text-xs font-bold text-emerald-400">{formatCurrency(i.myPortionAmount)}</span>
+            </div>
             <button onClick={() => api.deleteAmexGrocery(i.id).then(refresh)} className="text-indigo-400 hover:text-red-400 opacity-0 group-hover:opacity-100">
               <Trash2 size={12} />
             </button>
           </div>
         </div>
       ))}
-      <form onSubmit={handleAdd} className="flex gap-2 pt-2">
-        <input placeholder="Total £" type="number" value={totalAmount} onChange={e=>setTotalAmount(e.target.value)} className="w-1/2 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-indigo-400" />
-        <input placeholder="My Portion £" type="number" value={myPortionAmount} onChange={e=>setMyPortionAmount(e.target.value)} className="w-1/2 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-indigo-400" />
-        <button type="submit" className="bg-indigo-500 text-white p-2 rounded-lg hover:bg-indigo-600"><Plus size={14} /></button>
+      <form onSubmit={handleAdd} className="flex flex-col gap-2 pt-2">
+        <input placeholder="Shop name (e.g. Tesco)" value={name} onChange={e=>setName(e.target.value)} className="w-full bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-indigo-400" />
+        <div className="flex gap-2">
+          <input placeholder="Total £" type="number" value={totalAmount} onChange={e=>setTotalAmount(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-indigo-400" />
+          <input placeholder="My portion £" type="number" value={myPortionAmount} onChange={e=>setMyPortionAmount(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-indigo-400" />
+          <button type="submit" className="bg-indigo-500 text-white p-2 rounded-lg hover:bg-indigo-600"><Plus size={14} /></button>
+        </div>
       </form>
     </div>
   );

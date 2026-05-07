@@ -1,6 +1,6 @@
 # My Life
 
-A personal life organiser built with React, Node/Express, and PostgreSQL (Neon). Manage tasks, track time, plan workouts, and subscribe to a live calendar feed, all in one place. Deploy your own instance, set a registration code, and share it with whoever you want. Tasks and categories are private by default and can be selectively shared between users.
+A personal life organiser built with React, Node/Express, and PostgreSQL (Neon). Manage tasks, track time, plan workouts, track monthly finances, and pay off debt — all in one place. Deploy your own instance, set a registration code, and share it with whoever you want.
 
 ## Stack
 
@@ -25,18 +25,34 @@ A personal life organiser built with React, Node/Express, and PostgreSQL (Neon).
 - Feed token generated from Settings, valid for 1 year
 
 ### Workout Planner
-- **Exercise Library** — create exercises with name, YouTube/Vimeo video embed, categories (Strength, Cardio, etc.), and body areas (Chest, Back, etc.)
-- **Plan Builder** — multi-step wizard: name your plan, set days per week, configure each day (Upper/Lower/Full Body/Cardio/Rest) and assign exercises with target sets/reps/weight
-- **Active Workout** — work through exercises sequentially; view last session values as reference; enter actual sets/reps/weight; rest timer (with audio beep) between exercises
-- Last-session values stored per exercise — no history bloat
+- **Exercise Library** — create exercises with name, YouTube/Vimeo video embed, categories, and body areas
+- **Plan Builder** — multi-step wizard: name your plan, set days per week, configure each day and assign exercises with target sets/reps/weight
+- **Active Workout** — work through exercises sequentially; view last session values; enter actual sets/reps/weight; rest timer between exercises
+- Last-session values stored per exercise
 
-### Debt Calculator
-- Add and manage credit cards and loans with total balances, APR, and monthly payments
-- View portfolio-level summaries including combined debt, interest liability, and total monthly payments
-- Track promotional 0% balance transfers, including exact expiration dates and post-offer payment increases
-- Set specific monthly payment dates for accurate, date-based payoff simulations
-- Edit existing debt entries to accommodate variable interest rates and changing terms
-- All debt data is private and strictly scoped to the authenticated user
+### Debt Calculator (DebtFlow)
+- Add and manage credit cards with total balances, APR, and monthly payment amounts
+- Track 0% balance transfer offers with exact expiration dates and post-offer payment increases
+- Set specific monthly payment dates for precise date-based payoff simulations
+- **Live balance calculation** — balances are dynamically calculated on page load by simulating all payment cycles from the card's last-updated date to today; no manual tracking required
+- Payment allocation prioritises the APR balance first, then balance transfers
+- When all balance transfers are paid off, monthly payments automatically step up to the post-offer payment
+- Edit any card to snapshot the current live balance as the new baseline
+- Portfolio summary shows combined live debt, total monthly payments, and projected payoff timeline
+
+### Budget & Finances
+- **Income tracking** — add salary and additional income sources
+- **Shared household bills** — add full bill amounts with configurable split percentage (50/50, 100%, 33%); your share is calculated automatically
+- **Monthly expenses** — add personal fixed costs; flag any item as "Amex" to include it in the credit card projection
+- **Leftover budget** — automatically calculated: Total Income − My share of bills − Monthly expenses − Debt monthly payments
+- **Spending pie chart** — assign budget categories (with custom colours) to bills and expenses; a live conic-gradient pie chart shows your breakdown
+- **Amex credit card tracker**:
+  - Log recurring monthly card charges (subscriptions etc.)
+  - Set a "day-to-day" budget by adding an Amex-flagged expense (e.g. £400 for food/fuel/leisure)
+  - **Grocery shop tracker** — log individual shops with a name, total bill, and your personal portion; date-stamped
+  - **Expected statement** = recurring payments + day-to-day budget + full grocery totals (partner pays back their share)
+  - **My portion** = recurring + day-to-day + my grocery share only
+  - Warning banner displayed when your grocery portion exceeds your day-to-day Amex budget
 
 ## Local Development
 
@@ -73,6 +89,8 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 3. Add the environment variables above in Vercel's project settings
 4. Deploy
 
+> **Note:** After any schema changes, run `npm run db:push` locally (pointing at your production Neon DB) before deploying, so the live database is in sync before the new serverless function goes live.
+
 ## API Overview
 
 ### Auth
@@ -102,21 +120,28 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 ### Workout Planner
 | Method | Endpoint | Description |
 |---|---|---|
-| GET/POST | `/api/workout/exercise-categories` | List / create exercise categories |
-| PUT/DELETE | `/api/workout/exercise-categories/:id` | Manage a category |
-| GET/POST | `/api/workout/body-areas` | List / create body areas |
-| PUT/DELETE | `/api/workout/body-areas/:id` | Manage a body area |
 | GET/POST | `/api/workout/exercises` | List / create exercises |
 | GET/PUT/DELETE | `/api/workout/exercises/:id` | Manage an exercise |
 | GET/POST | `/api/workout/plans` | List / create workout plans |
 | GET/PUT/DELETE | `/api/workout/plans/:id` | Manage a plan |
 | PATCH | `/api/workout/plans/:id/activate` | Set as active plan |
-| PATCH | `/api/workout/day-exercises/:id/complete` | Record exercise completion (saves last sets/reps/weight) |
+| PATCH | `/api/workout/day-exercises/:id/complete` | Record exercise completion |
 
 ### Debt Calculator
 | Method | Endpoint | Description |
 |---|---|---|
-| GET/POST | `/api/debt/cards` | List / create debt cards (with balance transfers) |
+| GET/POST | `/api/debt/cards` | List / create debt cards (includes balance transfers) |
 | PUT/DELETE | `/api/debt/cards/:id` | Manage a debt card |
+
+### Budget & Finances
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/budget` | Fetch all budget data in one call |
+| POST/PUT/DELETE | `/api/budget/incomes/:id?` | Manage income sources |
+| POST/PUT/DELETE | `/api/budget/categories/:id?` | Manage budget categories |
+| POST/PUT/DELETE | `/api/budget/shared-bills/:id?` | Manage shared household bills |
+| POST/PUT/DELETE | `/api/budget/expenses/:id?` | Manage monthly expenses |
+| POST/PUT/DELETE | `/api/budget/amex/recurring/:id?` | Manage recurring Amex payments |
+| POST/PUT/DELETE | `/api/budget/amex/grocery/:id?` | Manage grocery shop entries |
 
 All endpoints except register, login, and the calendar feed require an `Authorization: Bearer <token>` header.
