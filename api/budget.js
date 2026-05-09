@@ -7,7 +7,7 @@ router.use(requireAuth)
 
 // ── GET ALL BUDGET DATA ────────────────────────────────────────────────────────
 
-router.get('/', async (req, res) => {
+router.get('/all', async (req, res) => {
   try {
     const userId = req.user.userId
     const [

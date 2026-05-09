@@ -1,7 +1,7 @@
 import api from './api'
 
 export async function getBudgetData() {
-  const { data } = await api.get('/budget')
+  const { data } = await api.get('/budget/all')
   return data
 }
 
