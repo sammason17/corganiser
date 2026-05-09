@@ -280,8 +280,8 @@ router.put('/amex/grocery/:id', async (req, res) => {
       data: { 
         ...(name !== undefined && { name }),
         ...(date && { date: new Date(date) }), 
-        totalAmount: Number(totalAmount) || 0, 
-        myPortionAmount: Number(myPortionAmount) || 0 
+        ...(totalAmount !== undefined && { totalAmount: Number(totalAmount) }),
+        ...(myPortionAmount !== undefined && { myPortionAmount: Number(myPortionAmount) })
       }
     })
     res.json(item)
