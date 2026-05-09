@@ -16,21 +16,35 @@ export default function BudgetDashboard() {
   });
   const [debtCards, setDebtCards] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
   useEffect(() => {
     fetchData();
   }, []);
 
   const fetchData = async () => {
+    setError(null);
     try {
-      const [budgetRes, debtRes] = await Promise.all([
+      // Fetch both independently so one failure doesn't block the other
+      const [budgetResult, debtResult] = await Promise.allSettled([
         api.getBudgetData(),
         getDebtCards()
       ]);
-      setData(budgetRes);
-      setDebtCards(debtRes);
-    } catch (err) {
-      console.error(err);
+
+      if (budgetResult.status === 'fulfilled') {
+        setData(budgetResult.value);
+      } else {
+        const status = budgetResult.reason?.response?.status;
+        const msg = budgetResult.reason?.response?.data?.error || budgetResult.reason?.message || 'Unknown error';
+        setError(`Budget data failed to load (${status || 'network error'}): ${msg}`);
+        console.error('[budget fetch]', budgetResult.reason);
+      }
+
+      if (debtResult.status === 'fulfilled') {
+        setDebtCards(debtResult.value);
+      } else {
+        console.error('[debt fetch]', debtResult.reason);
+      }
     } finally {
       setLoading(false);
     }
@@ -90,6 +104,18 @@ export default function BudgetDashboard() {
   const groceryOverBudget = totalAmexExpenses > 0 && totalAmexGroceryMine > totalAmexExpenses;
 
   if (loading) return <div className="p-8 text-center text-slate-500">Loading budget...</div>;
+
+  if (error) return (
+    <div className="p-8 flex flex-col gap-4 items-start">
+      <div className="bg-red-50 border border-red-200 rounded-2xl p-6 max-w-lg">
+        <p className="text-red-700 font-bold text-sm mb-1">Failed to load budget data</p>
+        <p className="text-red-500 text-xs font-mono">{error}</p>
+        <button onClick={fetchData} className="mt-4 bg-red-600 text-white text-xs font-bold px-4 py-2 rounded-lg hover:bg-red-700">
+          Retry
+        </button>
+      </div>
+    </div>
+  );
 
   return (
     <div className="bg-slate-50 text-slate-900 font-sans flex flex-col min-h-full rounded-2xl overflow-hidden border border-slate-200">
