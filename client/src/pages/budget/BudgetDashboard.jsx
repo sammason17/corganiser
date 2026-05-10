@@ -97,8 +97,7 @@ export default function BudgetDashboard() {
   const totalAmexGroceryFull = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.totalAmount, 0), [data.amexGrocery]);
   const totalAmexGroceryMine = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.myPortionAmount, 0), [data.amexGrocery]);
 
-  const baseLimit = (data.amexAllowance || 0) + totalAmexExpenses;
-  const effectiveDayToDayBudget = baseLimit;
+  const effectiveDayToDayBudget = data.amexAllowance || 0;
 
   // Statement = recurring(full) + fixed amex expenses + full grocery (Note: does NOT include Allowance to avoid double counting)
   const expectedAmexStatement = totalAmexRecurringFull + totalAmexExpenses + totalAmexGroceryFull;
@@ -299,15 +298,19 @@ export default function BudgetDashboard() {
                   <span>Recurring subscriptions (full)</span>
                   <span className="font-mono">{formatCurrency(totalAmexRecurringFull)}</span>
                 </div>
+                <div className="flex justify-between text-xs text-indigo-200 opacity-60 ml-4 mb-2">
+                  <span>↳ My recurring portion</span>
+                  <span className="font-mono">{formatCurrency(totalAmexRecurringMine)}</span>
+                </div>
                 {totalAmexExpenses > 0 && (
-                  <div className="flex justify-between text-xs text-indigo-200">
+                  <div className="flex justify-between text-xs text-indigo-200 mb-2">
                     <span>Fixed Amex expenses</span>
                     <span className="font-mono">{formatCurrency(totalAmexExpenses)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs text-indigo-200">
-                  <span>Day-to-day / Amex expenses limit</span>
-                  <span className="font-mono">{formatCurrency(baseLimit)}</span>
+                  <span>Monthly day-to-day allowance</span>
+                  <span className="font-mono">{formatCurrency(effectiveDayToDayBudget)}</span>
                 </div>
                 {totalNonAmex > 0 && (
                   <div className="flex justify-between text-xs text-rose-300">
@@ -320,8 +323,8 @@ export default function BudgetDashboard() {
                   <span className="font-mono">{formatCurrency(totalAmexGroceryFull)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-emerald-300 border-t border-white/10 pt-2">
-                  <span>↳ My grocery + non-amex + recurring</span>
-                  <span className="font-mono">{formatCurrency(myDayToDaySpend + totalAmexRecurringMine)} of {formatCurrency(effectiveDayToDayBudget + totalAmexRecurringMine)} budget</span>
+                  <span>↳ My day-to-day spend (grocery + non-amex)</span>
+                  <span className="font-mono">{formatCurrency(myDayToDaySpend)} of {formatCurrency(effectiveDayToDayBudget)} limit</span>
                 </div>
               </div>
             </div>
