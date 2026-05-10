@@ -98,17 +98,18 @@ export default function BudgetDashboard() {
   const totalAmexGroceryMine = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.myPortionAmount, 0), [data.amexGrocery]);
 
   const baseLimit = (data.amexAllowance || 0) + totalAmexExpenses;
-  const effectiveDayToDayBudget = baseLimit - totalNonAmex;
+  const effectiveDayToDayBudget = baseLimit;
 
   // Statement = recurring(full) + fixed amex expenses + full grocery (Note: does NOT include Allowance to avoid double counting)
   const expectedAmexStatement = totalAmexRecurringFull + totalAmexExpenses + totalAmexGroceryFull;
   
-  // My true portion = my recurring + fixed amex expenses + my grocery
-  const myAmexPortion = totalAmexRecurringMine + totalAmexExpenses + totalAmexGroceryMine;
+  // My true portion = my recurring + fixed amex expenses + my grocery + non-amex
+  const myAmexPortion = totalAmexRecurringMine + totalAmexExpenses + totalAmexGroceryMine + totalNonAmex;
   
   // Warning calculation
-  const groceryOverBudget = effectiveDayToDayBudget > 0 && totalAmexGroceryMine > effectiveDayToDayBudget;
-  const overspendAmount = totalAmexGroceryMine - effectiveDayToDayBudget;
+  const myDayToDaySpend = totalAmexGroceryMine + totalNonAmex;
+  const groceryOverBudget = effectiveDayToDayBudget > 0 && myDayToDaySpend > effectiveDayToDayBudget;
+  const overspendAmount = myDayToDaySpend - effectiveDayToDayBudget;
 
   if (loading) return <div className="p-8 text-center text-slate-500">Loading budget...</div>;
 
@@ -273,9 +274,9 @@ export default function BudgetDashboard() {
               <div className="flex items-start gap-3 bg-red-500/20 border border-red-500/40 rounded-2xl p-4 mb-2">
                 <span className="text-red-400 text-lg mt-0.5">⚠️</span>
                 <div>
-                  <p className="text-red-300 font-black text-xs uppercase tracking-widest">Grocery budget exceeded!</p>
+                  <p className="text-red-300 font-black text-xs uppercase tracking-widest">Budget exceeded!</p>
                   <p className="text-red-200 text-xs mt-1">
-                    Your grocery portion this month is <span className="font-bold">{formatCurrency(totalAmexGroceryMine)}</span>, which exceeds your effective day-to-day budget of <span className="font-bold">{formatCurrency(effectiveDayToDayBudget)}</span> by <span className="font-bold text-red-400">{formatCurrency(overspendAmount)}</span>.
+                    Your day-to-day spend (grocery + non-amex) is <span className="font-bold">{formatCurrency(myDayToDaySpend)}</span>, which exceeds your day-to-day limit of <span className="font-bold">{formatCurrency(effectiveDayToDayBudget)}</span> by <span className="font-bold text-red-400">{formatCurrency(overspendAmount)}</span>.
                   </p>
                 </div>
               </div>
@@ -310,8 +311,8 @@ export default function BudgetDashboard() {
                 </div>
                 {totalNonAmex > 0 && (
                   <div className="flex justify-between text-xs text-rose-300">
-                    <span>Non-Amex spend deduction</span>
-                    <span className="font-mono">-{formatCurrency(totalNonAmex)}</span>
+                    <span>Non-Amex spend</span>
+                    <span className="font-mono">+{formatCurrency(totalNonAmex)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs text-indigo-200">
@@ -319,8 +320,8 @@ export default function BudgetDashboard() {
                   <span className="font-mono">{formatCurrency(totalAmexGroceryFull)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-emerald-300 border-t border-white/10 pt-2">
-                  <span>↳ My grocery portion + recurring share</span>
-                  <span className="font-mono">{formatCurrency(totalAmexGroceryMine + totalAmexRecurringMine)} of {formatCurrency(effectiveDayToDayBudget + totalAmexRecurringMine)} budget</span>
+                  <span>↳ My grocery + non-amex + recurring</span>
+                  <span className="font-mono">{formatCurrency(myDayToDaySpend + totalAmexRecurringMine)} of {formatCurrency(effectiveDayToDayBudget + totalAmexRecurringMine)} budget</span>
                 </div>
               </div>
             </div>
