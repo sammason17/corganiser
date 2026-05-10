@@ -38,6 +38,7 @@ model User {
   budgetExpenses     BudgetExpense[]    @relation("UserBudgetExpenses")
   amexRecurring      AmexRecurring[]    @relation("UserAmexRecurring")
   amexGroceryShops   AmexGroceryShop[]  @relation("UserAmexGrocery")
+  nonAmexExpenses    NonAmexExpense[]   @relation("UserNonAmexExpenses")
 
   @@map("users")
 }
@@ -364,9 +365,10 @@ model BudgetExpense {
 }
 
 model AmexRecurring {
-  id        String   @id @default(cuid())
-  name      String
-  amount    Float
+  id              String   @id @default(cuid())
+  name            String
+  amount          Float
+  myPortionAmount Float?   @map("my_portion_amount")
   createdAt DateTime @default(now()) @map("created_at")
 
   ownerId String @map("owner_id")
@@ -387,4 +389,16 @@ model AmexGroceryShop {
   owner   User   @relation("UserAmexGrocery", fields: [ownerId], references: [id], onDelete: Cascade)
 
   @@map("amex_grocery_shops")
+}
+
+model NonAmexExpense {
+  id        String   @id @default(cuid())
+  name      String
+  amount    Float
+  createdAt DateTime @default(now()) @map("created_at")
+
+  ownerId String @map("owner_id")
+  owner   User   @relation("UserNonAmexExpenses", fields: [ownerId], references: [id], onDelete: Cascade)
+
+  @@map("non_amex_expenses")
 }

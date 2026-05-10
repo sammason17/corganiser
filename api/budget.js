@@ -16,7 +16,8 @@ router.get('/all', async (req, res) => {
       sharedBills,
       expenses,
       amexRecurring,
-      amexGrocery
+      amexGrocery,
+      nonAmexExpenses
     ] = await Promise.all([
       prisma.budgetIncome.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
       prisma.budgetCategory.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
@@ -31,10 +32,11 @@ router.get('/all', async (req, res) => {
         orderBy: { createdAt: 'asc' } 
       }),
       prisma.amexRecurring.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
-      prisma.amexGroceryShop.findMany({ where: { ownerId: userId }, orderBy: { date: 'desc' } })
+      prisma.amexGroceryShop.findMany({ where: { ownerId: userId }, orderBy: { date: 'desc' } }),
+      prisma.nonAmexExpense.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } })
     ])
 
-    res.json({ incomes, categories, sharedBills, expenses, amexRecurring, amexGrocery })
+    res.json({ incomes, categories, sharedBills, expenses, amexRecurring, amexGrocery, nonAmexExpenses })
   } catch (err) {
     console.error('[GET /budget]', err)
     res.status(500).json({ error: 'Internal server error' })
@@ -219,10 +221,15 @@ router.delete('/expenses/:id', async (req, res) => {
 
 router.post('/amex/recurring', async (req, res) => {
   try {
-    const { name, amount } = req.body
+    const { name, amount, myPortionAmount } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
     const item = await prisma.amexRecurring.create({
-      data: { name, amount: Number(amount) || 0, ownerId: req.user.userId }
+      data: { 
+        name, 
+        amount: Number(amount) || 0, 
+        myPortionAmount: myPortionAmount !== undefined && myPortionAmount !== '' ? Number(myPortionAmount) : null,
+        ownerId: req.user.userId 
+      }
     })
     res.status(201).json(item)
   } catch (err) {
@@ -232,10 +239,14 @@ router.post('/amex/recurring', async (req, res) => {
 
 router.put('/amex/recurring/:id', async (req, res) => {
   try {
-    const { name, amount } = req.body
+    const { name, amount, myPortionAmount } = req.body
     const item = await prisma.amexRecurring.update({
       where: { id: req.params.id, ownerId: req.user.userId },
-      data: { name, amount: Number(amount) || 0 }
+      data: { 
+        ...(name !== undefined && { name }),
+        ...(amount !== undefined && { amount: Number(amount) }),
+        ...(myPortionAmount !== undefined && { myPortionAmount: myPortionAmount === '' ? null : Number(myPortionAmount) })
+      }
     })
     res.json(item)
   } catch (err) {
@@ -293,6 +304,46 @@ router.put('/amex/grocery/:id', async (req, res) => {
 router.delete('/amex/grocery/:id', async (req, res) => {
   try {
     await prisma.amexGroceryShop.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
+    res.json({ message: 'Deleted' })
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+// ── NON-AMEX EXPENSES ─────────────────────────────────────────────────────────
+
+router.post('/non-amex', async (req, res) => {
+  try {
+    const { name, amount } = req.body
+    if (!name) return res.status(400).json({ error: 'Name is required' })
+    const item = await prisma.nonAmexExpense.create({
+      data: { name, amount: Number(amount) || 0, ownerId: req.user.userId }
+    })
+    res.status(201).json(item)
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.put('/non-amex/:id', async (req, res) => {
+  try {
+    const { name, amount } = req.body
+    const item = await prisma.nonAmexExpense.update({
+      where: { id: req.params.id, ownerId: req.user.userId },
+      data: { 
+        ...(name !== undefined && { name }),
+        ...(amount !== undefined && { amount: Number(amount) })
+      }
+    })
+    res.json(item)
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.delete('/non-amex/:id', async (req, res) => {
+  try {
+    await prisma.nonAmexExpense.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
     res.json({ message: 'Deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
