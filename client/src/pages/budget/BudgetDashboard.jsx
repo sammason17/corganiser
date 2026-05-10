@@ -12,7 +12,7 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currenc
 
 export default function BudgetDashboard() {
   const [data, setData] = useState({
-    incomes: [], categories: [], sharedBills: [], expenses: [], amexRecurring: [], amexGrocery: [], nonAmexExpenses: []
+    incomes: [], categories: [], sharedBills: [], expenses: [], amexRecurring: [], amexGrocery: [], nonAmexExpenses: [], amexAllowance: 0
   });
   const [debtCards, setDebtCards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -97,13 +97,14 @@ export default function BudgetDashboard() {
   const totalAmexGroceryFull = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.totalAmount, 0), [data.amexGrocery]);
   const totalAmexGroceryMine = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.myPortionAmount, 0), [data.amexGrocery]);
 
-  const effectiveDayToDayBudget = totalAmexExpenses - totalNonAmex;
+  const baseLimit = (data.amexAllowance || 0) + totalAmexExpenses;
+  const effectiveDayToDayBudget = baseLimit - totalNonAmex;
 
-  // Statement = recurring(full) + amex expenses - non amex + full grocery
-  const expectedAmexStatement = totalAmexRecurringFull + effectiveDayToDayBudget + totalAmexGroceryFull;
+  // Statement = recurring(full) + fixed amex expenses + full grocery (Note: does NOT include Allowance to avoid double counting)
+  const expectedAmexStatement = totalAmexRecurringFull + totalAmexExpenses + totalAmexGroceryFull;
   
-  // My true portion = my recurring + amex expenses - non amex + my grocery
-  const myAmexPortion = totalAmexRecurringMine + effectiveDayToDayBudget + totalAmexGroceryMine;
+  // My true portion = my recurring + fixed amex expenses + my grocery
+  const myAmexPortion = totalAmexRecurringMine + totalAmexExpenses + totalAmexGroceryMine;
   
   // Warning calculation
   const groceryOverBudget = effectiveDayToDayBudget > 0 && totalAmexGroceryMine > effectiveDayToDayBudget;
@@ -219,11 +220,29 @@ export default function BudgetDashboard() {
           <div className="bg-indigo-950 rounded-[2rem] p-8 text-white shadow-xl overflow-hidden relative">
             <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4"></div>
             
-            <div className="relative z-10 flex items-center gap-3 mb-8">
-              <CreditCard size={28} className="text-indigo-400" />
-              <div>
-                <h2 className="text-2xl font-black tracking-tight">Amex Credit Card Projection</h2>
-                <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mt-1">Expected Statement Tracker</p>
+            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
+              <div className="flex items-center gap-3">
+                <CreditCard size={28} className="text-indigo-400" />
+                <div>
+                  <h2 className="text-2xl font-black tracking-tight">Amex Credit Card Projection</h2>
+                  <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mt-1">Expected Statement Tracker</p>
+                </div>
+              </div>
+              <div className="bg-white/10 rounded-xl p-3 border border-white/20 flex items-center gap-3 shadow-inner">
+                <div>
+                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest">Monthly Allowance</p>
+                  <p className="text-xs text-indigo-200">Base budget limit</p>
+                </div>
+                <div className="relative">
+                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white font-bold">£</span>
+                  <input 
+                    type="number"
+                    value={data.amexAllowance || ''}
+                    onChange={(e) => setData({...data, amexAllowance: Number(e.target.value) || 0})}
+                    onBlur={(e) => api.updateAmexAllowance(Number(e.target.value) || 0)}
+                    className="w-24 bg-indigo-950/50 text-white font-mono font-bold text-lg px-3 py-2 pl-7 rounded-lg border border-indigo-400/30 outline-none focus:border-indigo-400"
+                  />
+                </div>
               </div>
             </div>
 
@@ -279,9 +298,15 @@ export default function BudgetDashboard() {
                   <span>Recurring subscriptions (full)</span>
                   <span className="font-mono">{formatCurrency(totalAmexRecurringFull)}</span>
                 </div>
+                {totalAmexExpenses > 0 && (
+                  <div className="flex justify-between text-xs text-indigo-200">
+                    <span>Fixed Amex expenses</span>
+                    <span className="font-mono">{formatCurrency(totalAmexExpenses)}</span>
+                  </div>
+                )}
                 <div className="flex justify-between text-xs text-indigo-200">
-                  <span>Day-to-day / Amex expenses budget</span>
-                  <span className="font-mono">{formatCurrency(totalAmexExpenses)}</span>
+                  <span>Day-to-day / Amex expenses limit</span>
+                  <span className="font-mono">{formatCurrency(baseLimit)}</span>
                 </div>
                 {totalNonAmex > 0 && (
                   <div className="flex justify-between text-xs text-rose-300">

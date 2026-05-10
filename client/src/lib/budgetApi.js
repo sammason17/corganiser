@@ -102,3 +102,9 @@ export async function deleteNonAmex(id) {
   const { data } = await api.delete(`/budget/non-amex/${id}`)
   return data
 }
+
+// Allowance
+export async function updateAmexAllowance(amount) {
+  const { data } = await api.put('/budget/allowance', { amount })
+  return data
+}

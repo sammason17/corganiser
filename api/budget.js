@@ -17,7 +17,8 @@ router.get('/all', async (req, res) => {
       expenses,
       amexRecurring,
       amexGrocery,
-      nonAmexExpenses
+      nonAmexExpenses,
+      user
     ] = await Promise.all([
       prisma.budgetIncome.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
       prisma.budgetCategory.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
@@ -33,13 +34,30 @@ router.get('/all', async (req, res) => {
       }),
       prisma.amexRecurring.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
       prisma.amexGroceryShop.findMany({ where: { ownerId: userId }, orderBy: { date: 'desc' } }),
-      prisma.nonAmexExpense.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } })
+      prisma.nonAmexExpense.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { amexAllowance: true } })
     ])
 
-    res.json({ incomes, categories, sharedBills, expenses, amexRecurring, amexGrocery, nonAmexExpenses })
+    res.json({ incomes, categories, sharedBills, expenses, amexRecurring, amexGrocery, nonAmexExpenses, amexAllowance: user?.amexAllowance || 0 })
   } catch (err) {
     console.error('[GET /budget]', err)
     res.status(500).json({ error: 'Internal server error' })
+  }
+})
+
+// ── ALLOWANCE ─────────────────────────────────────────────────────────────────
+
+router.put('/allowance', async (req, res) => {
+  try {
+    const { amount } = req.body
+    const user = await prisma.user.update({
+      where: { id: req.user.userId },
+      data: { amexAllowance: Number(amount) || 0 },
+      select: { amexAllowance: true }
+    })
+    res.json(user)
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
   }
 })
 
