@@ -227,26 +227,26 @@ export default function BudgetDashboard() {
               </div>
             </div>
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
                   <Repeat size={12} /> Recurring Amex Payments
                 </h3>
                 <AmexRecurringList data={data.amexRecurring} refresh={fetchData} amexExpenses={data.expenses.filter(e => e.isAmex)} />
               </div>
 
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
-                  <ShoppingCart size={12} /> Grocery Shop Tracker
-                </h3>
-                <AmexGroceryList data={data.amexGrocery} refresh={fetchData} />
-              </div>
-
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/10">
+              <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-300 mb-4 flex items-center gap-2">
                   <Wallet size={12} /> Non-Amex Expenses
                 </h3>
                 <NonAmexExpenseList data={data.nonAmexExpenses || []} refresh={fetchData} />
+              </div>
+
+              <div className="lg:col-span-2 bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
+                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
+                  <ShoppingCart size={12} /> Grocery Shop Tracker
+                </h3>
+                <AmexGroceryList data={data.amexGrocery} refresh={fetchData} />
               </div>
             </div>
 
@@ -523,9 +523,9 @@ function AmexRecurringList({ data, refresh, amexExpenses }) {
       )}
       {/* Editable recurring Amex entries */}
       {data.map(i => (
-        <div key={i.id} className="flex flex-col sm:flex-row sm:items-center justify-between group border-b border-white/5 pb-2 gap-2">
-          <span className="text-xs font-bold text-indigo-100">{i.name}</span>
-          <div className="flex items-center gap-3 self-end sm:self-auto">
+        <div key={i.id} className="flex flex-col sm:flex-row sm:items-center justify-between group border-b border-white/5 pb-2 gap-2 min-w-0">
+          <span className="text-xs font-bold text-indigo-100 truncate flex-1 pr-2">{i.name}</span>
+          <div className="flex items-center gap-3 self-end sm:self-auto shrink-0">
             <div className="text-right">
               <span className="text-[9px] text-indigo-400 font-bold uppercase tracking-widest block mb-0.5">Full £</span>
               <span className="font-mono text-xs font-bold text-white">{formatCurrency(i.amount)}</span>
@@ -591,8 +591,8 @@ function AmexGroceryList({ data, refresh }) {
                 onClick={() => { setEditingId(i.id); setEditName(i.name || 'Shop'); }}
                 className="text-left group/name"
               >
-                <span className="text-xs font-bold text-indigo-100 block group-hover/name:text-indigo-300 transition-colors">
-                  {i.name || 'Shop'} <span className="opacity-0 group-hover/name:opacity-50 text-[9px]">✎</span>
+                <span className="text-xs font-bold text-indigo-100 block group-hover/name:text-indigo-300 transition-colors truncate">
+                  {i.name || 'Shop'} <span className="opacity-0 group-hover/name:opacity-50 text-[9px] ml-1">✎</span>
                 </span>
                 <span className="text-[8px] font-bold uppercase tracking-widest text-indigo-300">
                   {new Date(i.date).toLocaleDateString('en-GB')}
@@ -641,9 +641,9 @@ function NonAmexExpenseList({ data, refresh }) {
   return (
     <div className="space-y-3">
       {data.map(i => (
-        <div key={i.id} className="flex justify-between items-center group border-b border-white/5 pb-2">
-          <span className="text-xs font-bold text-rose-100">{i.name}</span>
-          <div className="flex items-center gap-3">
+        <div key={i.id} className="flex justify-between items-center group border-b border-white/5 pb-2 min-w-0">
+          <span className="text-xs font-bold text-rose-100 truncate flex-1 pr-2">{i.name}</span>
+          <div className="flex items-center gap-3 shrink-0">
             <span className="font-mono text-xs font-bold text-white">-{formatCurrency(i.amount)}</span>
             <button onClick={() => api.deleteNonAmex(i.id).then(refresh)} className="text-rose-400 hover:text-red-400 opacity-0 group-hover:opacity-100">
               <Trash2 size={12} />
@@ -651,8 +651,8 @@ function NonAmexExpenseList({ data, refresh }) {
           </div>
         </div>
       ))}
-      <form onSubmit={handleAdd} className="flex gap-2 pt-2">
-        <input placeholder="Non-Amex spend..." value={name} onChange={e=>setName(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-rose-400" />
+      <form onSubmit={handleAdd} className="flex flex-wrap gap-2 pt-2">
+        <input placeholder="Non-Amex spend..." value={name} onChange={e=>setName(e.target.value)} className="flex-1 min-w-[100px] bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-rose-400" />
         <input placeholder="£" type="number" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} className="w-16 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-rose-400" />
         <button type="submit" className="bg-rose-500 text-white p-2 rounded-lg hover:bg-rose-600"><Plus size={14} /></button>
       </form>
