@@ -33,8 +33,8 @@ A personal life organiser built with React, Node/Express, and PostgreSQL (Neon).
 ### Debt Calculator (DebtFlow)
 - Add and manage credit cards with total balances, APR, and monthly payment amounts
 - Track 0% balance transfer offers with exact expiration dates and post-offer payment increases
-- Set specific monthly payment dates for precise date-based payoff simulations
-- **Live balance calculation** — balances are dynamically calculated on page load by simulating all payment cycles from the card's last-updated date to today; no manual tracking required
+- Set specific monthly **payment dates** and **statement dates** to pinpoint-calculate interest using the **Average Daily Balance** method, perfectly mirroring real banks
+- **Live balance calculation** — balances are dynamically calculated day-by-day from the card's last-updated date to today; no manual tracking required
 - Payment allocation prioritises the APR balance first, then balance transfers
 - When all balance transfers are paid off, monthly payments automatically step up to the post-offer payment
 - Edit any card to snapshot the current live balance as the new baseline
@@ -47,12 +47,13 @@ A personal life organiser built with React, Node/Express, and PostgreSQL (Neon).
 - **Leftover budget** — automatically calculated: Total Income − My share of bills − Monthly expenses − Debt monthly payments
 - **Spending pie chart** — assign budget categories (with custom colours) to bills and expenses; a live conic-gradient pie chart shows your breakdown
 - **Amex credit card tracker**:
-  - Log recurring monthly card charges (subscriptions etc.)
-  - Set a "day-to-day" budget by adding an Amex-flagged expense (e.g. £400 for food/fuel/leisure)
+  - Define an explicit **"Monthly Allowance"** for your day-to-day spending limit (food, fuel, leisure)
+  - Log recurring monthly card charges (subscriptions, bills) with configurable full vs. **personal portion** splits
   - **Grocery shop tracker** — log individual shops with a name, total bill, and your personal portion; date-stamped
-  - **Expected statement** = recurring payments + day-to-day budget + full grocery totals (partner pays back their share)
-  - **My portion** = recurring + day-to-day + my grocery share only
-  - Warning banner displayed when your grocery portion exceeds your day-to-day Amex budget
+  - **Non-Amex expenses** — log additional expenses made on other cards that should still count towards your day-to-day spending limit
+  - **Expected statement** = full recurring payments + full grocery totals + fixed Amex expenses
+  - **Financial breakdown** = cleanly isolates your fixed commitments from your flexible day-to-day spend
+  - Overspend warning banner strictly monitors your day-to-day spend (grocery portions + non-amex) against your Monthly Allowance limit
 
 ## Local Development
 
@@ -136,12 +137,14 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 ### Budget & Finances
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/budget` | Fetch all budget data in one call |
+| GET | `/api/budget/all` | Fetch all budget data in one call |
+| PUT | `/api/budget/allowance` | Update the user's Amex allowance limit |
 | POST/PUT/DELETE | `/api/budget/incomes/:id?` | Manage income sources |
 | POST/PUT/DELETE | `/api/budget/categories/:id?` | Manage budget categories |
 | POST/PUT/DELETE | `/api/budget/shared-bills/:id?` | Manage shared household bills |
 | POST/PUT/DELETE | `/api/budget/expenses/:id?` | Manage monthly expenses |
 | POST/PUT/DELETE | `/api/budget/amex/recurring/:id?` | Manage recurring Amex payments |
 | POST/PUT/DELETE | `/api/budget/amex/grocery/:id?` | Manage grocery shop entries |
+| POST/PUT/DELETE | `/api/budget/non-amex/:id?` | Manage non-Amex expenses |
 
 All endpoints except register, login, and the calendar feed require an `Authorization: Bearer <token>` header.
