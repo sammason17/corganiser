@@ -41,12 +41,13 @@ export default function DebtFlowPage() {
     apr: 18,
     monthlyPayment: 50,
     paymentDate: 1,
+    statementDate: '',
     balanceTransfers: []
   });
 
   const openAddModal = () => {
     setEditingCardId(null);
-    setNewCard({ name: '', totalDebt: 0, apr: 18, monthlyPayment: 50, paymentDate: 1, balanceTransfers: [] });
+    setNewCard({ name: '', totalDebt: 0, apr: 18, monthlyPayment: 50, paymentDate: 1, statementDate: '', balanceTransfers: [] });
     setIsAdding(true);
   };
 
@@ -56,6 +57,7 @@ export default function DebtFlowPage() {
       ...card,
       totalDebt: card.calculatedTotalDebt.toFixed(2),
       monthlyPayment: card.calculatedMonthlyPayment.toFixed(2),
+      statementDate: card.statementDate || '',
       balanceTransfers: card.calculatedTransfers.map(bt => ({
         ...bt,
         amount: bt.currentBalance.toFixed(2),
@@ -449,9 +451,9 @@ export default function DebtFlowPage() {
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
+                  <div className="grid grid-cols-3 gap-4">
                     <div>
-                      <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-1.5 tracking-widest px-1">Monthly Repayment (£)</label>
+                      <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-1.5 tracking-widest px-1">Monthly Repayment</label>
                       <input 
                         type="number" 
                         className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono font-bold text-indigo-600 text-sm"
@@ -460,7 +462,7 @@ export default function DebtFlowPage() {
                       />
                     </div>
                     <div>
-                      <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-1.5 tracking-widest px-1">Payment Date (1-31)</label>
+                      <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-1.5 tracking-widest px-1">Payment Date</label>
                       <input 
                         type="number" 
                         min="1"
@@ -468,6 +470,18 @@ export default function DebtFlowPage() {
                         className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono font-bold text-indigo-600 text-sm"
                         value={newCard.paymentDate}
                         onChange={e => setNewCard({...newCard, paymentDate: e.target.value})}
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[9px] font-extrabold text-slate-400 uppercase mb-1.5 tracking-widest px-1">Statement Date</label>
+                      <input 
+                        type="number" 
+                        min="1"
+                        max="31"
+                        placeholder="Same"
+                        className="w-full px-5 py-3 bg-slate-50 border border-slate-100 rounded-xl focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all font-mono font-bold text-indigo-600 text-sm placeholder:text-slate-300 placeholder:font-sans placeholder:font-semibold"
+                        value={newCard.statementDate}
+                        onChange={e => setNewCard({...newCard, statementDate: e.target.value})}
                       />
                     </div>
                   </div>

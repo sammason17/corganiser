@@ -24,32 +24,14 @@ export function calculateCurrentState(card) {
   let simulationDate = new Date(baseDate);
   simulationDate.setHours(0, 0, 0, 0);
 
-  while (true) {
-    let nextYear = simulationDate.getFullYear();
-    let nextMonth = simulationDate.getMonth();
-    
-    let lastDayOfMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
-    let targetDay = Math.min(card.paymentDate || 1, lastDayOfMonth);
+  const dailyRate = (card.apr / 100) / 365;
+  let uncapitalizedInterest = 0;
 
-    if (simulationDate.getDate() >= targetDay) {
-      nextMonth++;
-      if (nextMonth > 11) {
-        nextMonth = 0;
-        nextYear++;
-      }
-      lastDayOfMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
-      targetDay = Math.min(card.paymentDate || 1, lastDayOfMonth);
-    }
-    let nextPaymentDate = new Date(nextYear, nextMonth, targetDay);
-    nextPaymentDate.setHours(0, 0, 0, 0);
+  const paymentDay = card.paymentDate || 1;
+  const statementDay = card.statementDate || paymentDay;
 
-    if (nextPaymentDate > today) {
-      break;
-    }
-
-    simulationDate = nextPaymentDate;
-
-    // Process expired transfers
+  while (simulationDate <= today) {
+    // 1. Process expired transfers
     const expired = activeTransfers.filter(t => simulationDate >= t.endDate && t.currentBalance > 0);
     expired.forEach(t => {
       aprBalance += t.currentBalance;
@@ -60,46 +42,58 @@ export function calculateCurrentState(card) {
     });
     activeTransfers = activeTransfers.filter(t => simulationDate < t.endDate || t.currentBalance > 0);
 
-    // Interest
-    const monthlyRate = (card.apr / 100) / 12;
-    const interest = aprBalance * monthlyRate;
-    aprBalance += interest;
+    // 2. Accrue Daily Interest
+    uncapitalizedInterest += aprBalance * dailyRate;
 
-    // Payment Allocation
-    let paymentRemaining = currentMonthlyPayment;
-    
-    while (paymentRemaining > 0 && (aprBalance > 0 || activeTransfers.some(t => t.currentBalance > 0))) {
-      let targetPot = null;
-      if (aprBalance > 0) {
-        targetPot = { type: 'apr', balance: aprBalance, id: 'apr' };
-      } else {
-        const transfers = activeTransfers.filter(t => t.currentBalance > 0).sort((a, b) => b.currentBalance - a.currentBalance);
-        if (transfers.length > 0) {
-          targetPot = { type: 'transfer', balance: transfers[0].currentBalance, id: transfers[0].id };
+    const simYear = simulationDate.getFullYear();
+    const simMonth = simulationDate.getMonth();
+    const lastDayOfMonth = new Date(simYear, simMonth + 1, 0).getDate();
+
+    // 3. Payment Date?
+    if (simulationDate.getDate() === Math.min(paymentDay, lastDayOfMonth)) {
+      let paymentRemaining = currentMonthlyPayment;
+      
+      while (paymentRemaining > 0 && (aprBalance > 0 || activeTransfers.some(t => t.currentBalance > 0))) {
+        let targetPot = null;
+        if (aprBalance > 0) {
+          targetPot = { type: 'apr', balance: aprBalance, id: 'apr' };
+        } else {
+          const transfers = activeTransfers.filter(t => t.currentBalance > 0).sort((a, b) => b.currentBalance - a.currentBalance);
+          if (transfers.length > 0) {
+            targetPot = { type: 'transfer', balance: transfers[0].currentBalance, id: transfers[0].id };
+          }
+        }
+
+        if (!targetPot) break;
+
+        const amountToPay = Math.min(targetPot.balance, paymentRemaining);
+        
+        if (targetPot.type === 'apr') {
+          aprBalance -= amountToPay;
+        } else {
+          const transfer = activeTransfers.find(t => t.id === targetPot.id);
+          if (transfer) transfer.currentBalance -= amountToPay;
+        }
+        
+        paymentRemaining -= amountToPay;
+      }
+    }
+
+    // 4. Statement Date?
+    if (simulationDate.getDate() === Math.min(statementDay, lastDayOfMonth)) {
+      aprBalance += uncapitalizedInterest;
+      uncapitalizedInterest = 0;
+
+      // Post BT logic if all BTs are paid off
+      if (activeTransfers.every(t => t.currentBalance <= 0) && card.balanceTransfers.length > 0) {
+        const maxPostOffer = Math.max(...card.balanceTransfers.map(t => Number(t.postOfferPayment) || 0));
+        if (maxPostOffer > currentMonthlyPayment) {
+          currentMonthlyPayment = maxPostOffer;
         }
       }
-
-      if (!targetPot) break;
-
-      const amountToPay = Math.min(targetPot.balance, paymentRemaining);
-      
-      if (targetPot.type === 'apr') {
-        aprBalance -= amountToPay;
-      } else {
-        const transfer = activeTransfers.find(t => t.id === targetPot.id);
-        if (transfer) transfer.currentBalance -= amountToPay;
-      }
-      
-      paymentRemaining -= amountToPay;
     }
 
-    // Post BT logic if all BTs are paid off
-    if (activeTransfers.every(t => t.currentBalance <= 0) && card.balanceTransfers.length > 0) {
-      const maxPostOffer = Math.max(...card.balanceTransfers.map(t => Number(t.postOfferPayment) || 0));
-      if (maxPostOffer > currentMonthlyPayment) {
-        currentMonthlyPayment = maxPostOffer;
-      }
-    }
+    simulationDate.setDate(simulationDate.getDate() + 1);
   }
 
   const totalRemaining = aprBalance + activeTransfers.reduce((sum, t) => sum + t.currentBalance, 0);
@@ -110,6 +104,7 @@ export function calculateCurrentState(card) {
     calculatedAprBalance: Math.max(0, aprBalance),
     calculatedTransfers: activeTransfers,
     calculatedMonthlyPayment: currentMonthlyPayment,
+    uncapitalizedInterest
   };
 }
 
@@ -122,31 +117,22 @@ export function simulatePayoff(currentState) {
   let activeTransfers = currentState.calculatedTransfers.map(t => ({ ...t, endDate: new Date(t.endDate) }));
   let currentMonthlyPayment = currentState.calculatedMonthlyPayment;
 
+  const card = currentState; 
+  let uncapitalizedInterest = currentState.uncapitalizedInterest || 0;
+  const dailyRate = (card.apr / 100) / 365;
+
   let simulationDate = new Date();
   simulationDate.setHours(0, 0, 0, 0);
   
-  const card = currentState; 
+  const paymentDay = card.paymentDate || 1;
+  const statementDay = card.statementDate || paymentDay;
 
-  while ((aprBalance > 0 || activeTransfers.some(t => t.currentBalance > 0)) && currentMonth < MAX_SIMULATION_MONTHS) {
-    let nextYear = simulationDate.getFullYear();
-    let nextMonth = simulationDate.getMonth();
+  let daysSimulated = 0;
+  const MAX_DAYS = MAX_SIMULATION_MONTHS * 31;
+  let monthlyPaymentApplied = 0;
+
+  while ((aprBalance > 0 || activeTransfers.some(t => t.currentBalance > 0) || uncapitalizedInterest > 0) && daysSimulated < MAX_DAYS) {
     
-    let lastDayOfMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
-    let targetDay = Math.min(card.paymentDate || 1, lastDayOfMonth);
-
-    if (simulationDate.getDate() >= targetDay) {
-      nextMonth++;
-      if (nextMonth > 11) {
-        nextMonth = 0;
-        nextYear++;
-      }
-      lastDayOfMonth = new Date(nextYear, nextMonth + 1, 0).getDate();
-      targetDay = Math.min(card.paymentDate || 1, lastDayOfMonth);
-    }
-    let nextPaymentDate = new Date(nextYear, nextMonth, targetDay);
-    nextPaymentDate.setHours(0, 0, 0, 0);
-    simulationDate = nextPaymentDate;
-
     // Process expired transfers
     const expired = activeTransfers.filter(t => simulationDate >= t.endDate && t.currentBalance > 0);
     expired.forEach(t => {
@@ -158,70 +144,85 @@ export function simulatePayoff(currentState) {
     });
     activeTransfers = activeTransfers.filter(t => simulationDate < t.endDate || t.currentBalance > 0);
 
-    // Interest
-    const monthlyRate = (card.apr / 100) / 12;
-    const interest = aprBalance * monthlyRate;
-    aprBalance += interest;
-    totalInterest += interest;
+    // Accrue Daily Interest
+    uncapitalizedInterest += aprBalance * dailyRate;
 
-    // Safety check
-    if (aprBalance > 0 && currentMonthlyPayment <= interest && currentMonth > 100) {
-       return { steps, totalInterest, payoffDate: null, monthsToPayoff: currentMonth, isInfinite: true };
+    const simYear = simulationDate.getFullYear();
+    const simMonth = simulationDate.getMonth();
+    const lastDayOfMonth = new Date(simYear, simMonth + 1, 0).getDate();
+
+    // Payment Date?
+    if (simulationDate.getDate() === Math.min(paymentDay, lastDayOfMonth)) {
+      let paymentRemaining = currentMonthlyPayment;
+      
+      while (paymentRemaining > 0 && (aprBalance > 0 || activeTransfers.some(t => t.currentBalance > 0))) {
+        let targetPot = null;
+        if (aprBalance > 0) {
+          targetPot = { type: 'apr', balance: aprBalance, id: 'apr' };
+        } else {
+          const transfers = activeTransfers.filter(t => t.currentBalance > 0).sort((a, b) => b.currentBalance - a.currentBalance);
+          if (transfers.length > 0) {
+            targetPot = { type: 'transfer', balance: transfers[0].currentBalance, id: transfers[0].id };
+          }
+        }
+
+        if (!targetPot) break;
+
+        const amountToPay = Math.min(targetPot.balance, paymentRemaining);
+        
+        if (targetPot.type === 'apr') {
+          aprBalance -= amountToPay;
+        } else {
+          const transfer = activeTransfers.find(t => t.id === targetPot.id);
+          if (transfer) transfer.currentBalance -= amountToPay;
+        }
+        
+        paymentRemaining -= amountToPay;
+        monthlyPaymentApplied += amountToPay;
+      }
     }
 
-    // Payment Allocation
-    let paymentRemaining = currentMonthlyPayment;
-    let paymentApplied = 0;
-    
-    while (paymentRemaining > 0 && (aprBalance > 0 || activeTransfers.some(t => t.currentBalance > 0))) {
-      let targetPot = null;
-      if (aprBalance > 0) {
-        targetPot = { type: 'apr', balance: aprBalance, id: 'apr' };
-      } else {
-        const transfers = activeTransfers.filter(t => t.currentBalance > 0).sort((a, b) => b.currentBalance - a.currentBalance);
-        if (transfers.length > 0) {
-          targetPot = { type: 'transfer', balance: transfers[0].currentBalance, id: transfers[0].id };
+    // Statement Date?
+    if (simulationDate.getDate() === Math.min(statementDay, lastDayOfMonth)) {
+      aprBalance += uncapitalizedInterest;
+      totalInterest += uncapitalizedInterest;
+      
+      let interestChargedThisMonth = uncapitalizedInterest;
+      uncapitalizedInterest = 0;
+
+      // Post BT logic
+      if (activeTransfers.every(t => t.currentBalance <= 0) && card.balanceTransfers.length > 0) {
+        const maxPostOffer = Math.max(...card.balanceTransfers.map(t => Number(t.postOfferPayment) || 0));
+        if (maxPostOffer > currentMonthlyPayment) {
+          currentMonthlyPayment = maxPostOffer;
         }
       }
 
-      if (!targetPot) break;
+      currentMonth++;
+      const totalRemaining = aprBalance + activeTransfers.reduce((sum, t) => sum + t.currentBalance, 0);
 
-      const amountToPay = Math.min(targetPot.balance, paymentRemaining);
-      
-      if (targetPot.type === 'apr') {
-        aprBalance -= amountToPay;
-      } else {
-        const transfer = activeTransfers.find(t => t.id === targetPot.id);
-        if (transfer) transfer.currentBalance -= amountToPay;
+      steps.push({
+        month: currentMonth,
+        date: new Date(simulationDate),
+        totalRemaining: Math.max(0, totalRemaining),
+        interestCharged: interestChargedThisMonth,
+        paymentApplied: monthlyPaymentApplied,
+        aprBalance,
+        transferBalances: activeTransfers.map(t => t.currentBalance)
+      });
+
+      monthlyPaymentApplied = 0;
+
+      // Safety check
+      if (aprBalance > 0 && currentMonthlyPayment <= interestChargedThisMonth && currentMonth > 100) {
+         return { steps, totalInterest, payoffDate: null, monthsToPayoff: currentMonth, isInfinite: true };
       }
-      
-      paymentRemaining -= amountToPay;
-      paymentApplied += amountToPay;
+
+      if (totalRemaining <= 0 && uncapitalizedInterest <= 0) break;
     }
 
-    // Post BT logic
-    if (activeTransfers.every(t => t.currentBalance <= 0) && card.balanceTransfers.length > 0) {
-      const maxPostOffer = Math.max(...card.balanceTransfers.map(t => Number(t.postOfferPayment) || 0));
-      if (maxPostOffer > currentMonthlyPayment) {
-        currentMonthlyPayment = maxPostOffer;
-      }
-    }
-
-    currentMonth++;
-
-    const totalRemaining = aprBalance + activeTransfers.reduce((sum, t) => sum + t.currentBalance, 0);
-
-    steps.push({
-      month: currentMonth,
-      date: simulationDate,
-      totalRemaining: Math.max(0, totalRemaining),
-      interestCharged: interest,
-      paymentApplied: paymentApplied,
-      aprBalance,
-      transferBalances: activeTransfers.map(t => t.currentBalance)
-    });
-
-    if (totalRemaining <= 0) break;
+    simulationDate.setDate(simulationDate.getDate() + 1);
+    daysSimulated++;
   }
 
   return {
@@ -229,6 +230,6 @@ export function simulatePayoff(currentState) {
     totalInterest,
     payoffDate: currentMonth < MAX_SIMULATION_MONTHS ? simulationDate : null,
     monthsToPayoff: currentMonth,
-    isInfinite: currentMonth >= MAX_SIMULATION_MONTHS
+    isInfinite: currentMonth >= MAX_SIMULATION_MONTHS || daysSimulated >= MAX_DAYS
   };
 }

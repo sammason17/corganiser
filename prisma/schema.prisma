@@ -279,6 +279,7 @@ model DebtCard {
   apr            Float
   monthlyPayment Float    @map("monthly_payment")
   paymentDate    Int      @default(1) @map("payment_date")
+  statementDate  Int?     @map("statement_date")
   createdAt      DateTime @default(now()) @map("created_at")
   updatedAt      DateTime @updatedAt @map("updated_at")
 

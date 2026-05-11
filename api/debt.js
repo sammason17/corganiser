@@ -28,7 +28,7 @@ router.get('/cards', async (req, res) => {
 
 router.post('/cards', async (req, res) => {
   try {
-    const { name, totalDebt, apr, monthlyPayment, paymentDate, balanceTransfers = [] } = req.body
+    const { name, totalDebt, apr, monthlyPayment, paymentDate, statementDate, balanceTransfers = [] } = req.body
     
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' })
 
@@ -40,6 +40,7 @@ router.post('/cards', async (req, res) => {
           apr: Number(apr) || 0,
           monthlyPayment: Number(monthlyPayment) || 0,
           paymentDate: Number(paymentDate) || 1,
+          statementDate: statementDate ? Number(statementDate) : null,
           ownerId: req.user.userId,
           balanceTransfers: {
             create: balanceTransfers.map(bt => ({
@@ -63,7 +64,7 @@ router.post('/cards', async (req, res) => {
 
 router.put('/cards/:id', async (req, res) => {
   try {
-    const { name, totalDebt, apr, monthlyPayment, paymentDate, balanceTransfers = [] } = req.body
+    const { name, totalDebt, apr, monthlyPayment, paymentDate, statementDate, balanceTransfers = [] } = req.body
     
     const existing = await prisma.debtCard.findUnique({ where: { id: req.params.id } })
     if (!existing) return res.status(404).json({ error: 'Not found' })
@@ -81,6 +82,7 @@ router.put('/cards/:id', async (req, res) => {
           ...(apr !== undefined && { apr: Number(apr) }),
           ...(monthlyPayment !== undefined && { monthlyPayment: Number(monthlyPayment) }),
           ...(paymentDate !== undefined && { paymentDate: Number(paymentDate) }),
+          ...(statementDate !== undefined && { statementDate: statementDate ? Number(statementDate) : null }),
           balanceTransfers: {
             create: balanceTransfers.map(bt => ({
               amount: Number(bt.amount) || 0,
