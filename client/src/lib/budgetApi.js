@@ -88,6 +88,10 @@ export async function deleteAmexGrocery(id) {
   const { data } = await api.delete(`/budget/amex/grocery/${id}`)
   return data
 }
+export async function clearAmexGrocery() {
+  const { data } = await api.delete('/budget/amex/grocery')
+  return data
+}
 
 // Non-Amex Expenses
 export async function createNonAmex(payload) {
@@ -100,6 +104,10 @@ export async function updateNonAmex(id, payload) {
 }
 export async function deleteNonAmex(id) {
   const { data } = await api.delete(`/budget/non-amex/${id}`)
+  return data
+}
+export async function clearNonAmex() {
+  const { data } = await api.delete('/budget/non-amex')
   return data
 }
 

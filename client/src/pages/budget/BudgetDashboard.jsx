@@ -255,16 +255,30 @@ export default function BudgetDashboard() {
               </div>
 
               <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-300 mb-4 flex items-center gap-2">
-                  <Wallet size={12} /> Non-Amex Expenses
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-300 flex items-center gap-2">
+                    <Wallet size={12} /> Non-Amex Expenses
+                  </h3>
+                  {data.nonAmexExpenses?.length > 0 && (
+                    <button onClick={() => { if(window.confirm('Clear all non-amex expenses?')) { api.clearNonAmex().then(fetchData) } }} className="text-[9px] text-rose-400 hover:text-white font-bold uppercase tracking-widest bg-rose-400/10 hover:bg-rose-500/50 px-2 py-1 rounded transition-colors">
+                      Clear All
+                    </button>
+                  )}
+                </div>
                 <NonAmexExpenseList data={data.nonAmexExpenses || []} refresh={fetchData} />
               </div>
 
               <div className="lg:col-span-2 bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
-                  <ShoppingCart size={12} /> Grocery Shop Tracker
-                </h3>
+                <div className="flex items-center justify-between mb-4">
+                  <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 flex items-center gap-2">
+                    <ShoppingCart size={12} /> Grocery Shop Tracker
+                  </h3>
+                  {data.amexGrocery?.length > 0 && (
+                    <button onClick={() => { if(window.confirm('Clear all grocery shops?')) { api.clearAmexGrocery().then(fetchData) } }} className="text-[9px] text-indigo-400 hover:text-white font-bold uppercase tracking-widest bg-indigo-400/10 hover:bg-indigo-500/50 px-2 py-1 rounded transition-colors">
+                      Clear All
+                    </button>
+                  )}
+                </div>
                 <AmexGroceryList data={data.amexGrocery} refresh={fetchData} />
               </div>
             </div>

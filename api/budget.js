@@ -319,6 +319,15 @@ router.put('/amex/grocery/:id', async (req, res) => {
   }
 })
 
+router.delete('/amex/grocery', async (req, res) => {
+  try {
+    await prisma.amexGroceryShop.deleteMany({ where: { ownerId: req.user.userId } })
+    res.json({ message: 'All deleted' })
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.delete('/amex/grocery/:id', async (req, res) => {
   try {
     await prisma.amexGroceryShop.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
@@ -354,6 +363,15 @@ router.put('/non-amex/:id', async (req, res) => {
       }
     })
     res.json(item)
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.delete('/non-amex', async (req, res) => {
+  try {
+    await prisma.nonAmexExpense.deleteMany({ where: { ownerId: req.user.userId } })
+    res.json({ message: 'All deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
