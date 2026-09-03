@@ -868,7 +868,7 @@ function AmexStatementCalculator() {
   // Form State
   const [vendorName, setVendorName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
-  const [payerName, setPayerName] = useState('Me');
+  const [payerName, setPayerName] = useState('Sam');
   const [payerCoveredAmount, setPayerCoveredAmount] = useState('');
 
   const fetchData = async () => {
@@ -916,7 +916,7 @@ function AmexStatementCalculator() {
 
   shops.forEach(shop => {
     const remainder = shop.totalAmount - shop.payerCoveredAmount;
-    if (shop.payerName === 'Me') {
+    if (shop.payerName === 'Sam') {
       partnerOwesForMyShops += remainder;
     } else {
       iOweForPartnerShops += remainder;
@@ -946,17 +946,17 @@ function AmexStatementCalculator() {
           <div className="bg-white/5 rounded-2xl p-6 mb-6">
              <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4">Add Grocery Shop</h3>
              <form onSubmit={handleAdd} className="flex flex-col gap-3">
-               <div className="flex gap-2">
-                 <input placeholder="Vendor (e.g. Tesco)" value={vendorName} onChange={e=>setVendorName(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400" />
-                 <input placeholder="Total £" type="number" step="0.01" value={totalAmount} onChange={e=>setTotalAmount(e.target.value)} className="w-24 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400" />
+               <div className="flex flex-col sm:flex-row gap-2">
+                 <input placeholder="Vendor (e.g. Tesco)" value={vendorName} onChange={e=>setVendorName(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400 min-w-[100px]" />
+                 <input placeholder="Total £" type="number" step="0.01" value={totalAmount} onChange={e=>setTotalAmount(e.target.value)} className="w-full sm:w-24 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400" />
                </div>
-               <div className="flex gap-2 items-center">
-                 <span className="text-xs text-slate-400 font-bold whitespace-nowrap">Who Paid?</span>
-                 <select value={payerName} onChange={e=>setPayerName(e.target.value)} className="w-28 bg-white/10 text-white text-xs px-2 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400">
-                   <option value="Me">Me</option>
-                   <option value="Partner">Partner</option>
+               <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                 <span className="text-xs text-slate-400 font-bold whitespace-nowrap hidden sm:block">Who Paid?</span>
+                 <select value={payerName} onChange={e=>setPayerName(e.target.value)} className="w-full sm:w-28 bg-white/10 text-white text-xs px-2 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400">
+                   <option value="Sam">Sam</option>
+                   <option value="Lauren">Lauren</option>
                  </select>
-                 <input placeholder={`Amount ${payerName} Covers £`} type="number" step="0.01" value={payerCoveredAmount} onChange={e=>setPayerCoveredAmount(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400" />
+                 <input placeholder={`Amount ${payerName} Covers £`} type="number" step="0.01" value={payerCoveredAmount} onChange={e=>setPayerCoveredAmount(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400 min-w-[100px]" />
                </div>
                <button type="submit" className="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 text-xs font-bold uppercase tracking-widest mt-1">Add Shop</button>
              </form>
@@ -965,25 +965,25 @@ function AmexStatementCalculator() {
           <div className="space-y-3">
              {shops.length === 0 && <p className="text-slate-500 text-xs text-center py-4">No shops added this month.</p>}
              {shops.map(shop => (
-               <div key={shop.id} className="flex items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5 group">
+               <div key={shop.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5 group gap-3 sm:gap-0">
                  <div>
                    <p className="text-sm font-bold text-white">{shop.vendorName}</p>
                    <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{new Date(shop.date).toLocaleDateString('en-GB')}</p>
                  </div>
-                 <div className="flex items-center gap-6">
-                   <div className="text-right hidden sm:block">
+                 <div className="flex flex-wrap items-center gap-3 sm:gap-6 w-full sm:w-auto">
+                   <div className="text-left sm:text-right hidden sm:block">
                      <p className="text-[9px] text-slate-500 font-bold uppercase">Total</p>
                      <p className="font-mono text-xs">{formatCurrency(shop.totalAmount)}</p>
                    </div>
-                   <div className="text-right border-l border-white/10 pl-4">
+                   <div className="text-left sm:text-right sm:border-l border-white/10 sm:pl-4 flex-1 sm:flex-none">
                      <p className="text-[9px] text-blue-400 font-bold uppercase">{shop.payerName} Paid</p>
                      <p className="font-mono text-xs">{formatCurrency(shop.totalAmount)}</p>
                    </div>
-                   <div className="text-right border-l border-white/10 pl-4">
-                     <p className="text-[9px] text-slate-400 font-bold uppercase">{shop.payerName === 'Me' ? 'Partner Owes' : 'I Owe'}</p>
+                   <div className="text-left sm:text-right border-l border-white/10 pl-3 sm:pl-4 flex-1 sm:flex-none">
+                     <p className="text-[9px] text-slate-400 font-bold uppercase">{shop.payerName === 'Sam' ? 'Lauren Owes' : 'Sam Owes'}</p>
                      <p className="font-mono text-xs font-bold text-emerald-400">{formatCurrency(shop.totalAmount - shop.payerCoveredAmount)}</p>
                    </div>
-                   <button onClick={() => api.deleteSharedAmexShop(shop.id).then(fetchData)} className="text-slate-500 hover:text-red-400 opacity-0 group-hover:opacity-100 transition-opacity">
+                   <button onClick={() => api.deleteSharedAmexShop(shop.id).then(fetchData)} className="text-slate-500 hover:text-red-400 sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 sm:p-0">
                      <Trash2 size={16} />
                    </button>
                  </div>
@@ -996,7 +996,7 @@ function AmexStatementCalculator() {
         {/* Right Side: Calculation Summary */}
         <div className="w-full lg:w-80 flex flex-col justify-center gap-8">
            <div className="bg-white/10 rounded-2xl p-6 border border-white/20">
-             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Partner's Statement Amount</h3>
+             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Lauren's Statement Amount</h3>
              <div className="relative">
                <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white font-bold text-xl">£</span>
                <input 
@@ -1018,19 +1018,19 @@ function AmexStatementCalculator() {
              <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4">Settlement Breakdown</h3>
              <div className="space-y-3">
                <div className="flex justify-between items-center text-xs">
-                 <span className="text-slate-400">Partner Statement</span>
+                 <span className="text-slate-400">Lauren's Statement</span>
                  <span className="font-mono text-white">{formatCurrency(partnerStatement)}</span>
                </div>
                <div className="flex justify-between items-center text-xs">
-                 <span className="text-slate-400">Partner Owes for your shops</span>
+                 <span className="text-slate-400">Lauren Owes for your shops</span>
                  <span className="font-mono text-emerald-400">+{formatCurrency(partnerOwesForMyShops)}</span>
                </div>
                <div className="flex justify-between items-center text-xs border-b border-white/10 pb-3">
-                 <span className="text-slate-400">You Owe for Partner's shops</span>
+                 <span className="text-slate-400">Sam Owes for Lauren's shops</span>
                  <span className="font-mono text-red-400">-{formatCurrency(iOweForPartnerShops)}</span>
                </div>
                <div className="flex justify-between items-center pt-2">
-                 <span className="text-[10px] font-black uppercase tracking-widest text-white">Final Amount Partner Owes</span>
+                 <span className="text-[10px] font-black uppercase tracking-widest text-white">Final Amount Lauren Owes</span>
                  <span className="font-mono text-2xl font-black text-blue-400">{formatCurrency(finalAmountPartnerOwes)}</span>
                </div>
              </div>
