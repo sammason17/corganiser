@@ -124,3 +124,26 @@ export async function updateAmexAllowance(amount) {
   const { data } = await api.put('/budget/allowance', { amount })
   return data
 }
+
+// ── Shared Amex Calculator ──────────────────────────────────────────────────
+export async function getCalculatorState() {
+  const { data } = await api.get('/budget/calculator/state')
+  return data
+}
+export async function createSharedAmexShop(payload) {
+  const { data } = await api.post('/budget/calculator/shops', payload)
+  return data
+}
+export async function deleteSharedAmexShop(id) {
+  const { data } = await api.delete(`/budget/calculator/shops/${id}`)
+  return data
+}
+export async function clearCalculatorShops() {
+  const { data } = await api.delete('/budget/calculator/shops')
+  return data
+}
+export async function updateCalculatorStatement(amount) {
+  const { data } = await api.put('/budget/calculator/statement', { amount })
+  return data
+}
+

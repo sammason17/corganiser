@@ -418,4 +418,72 @@ router.delete('/non-amex/:id', async (req, res) => {
   }
 })
 
+// ── SHARED AMEX CALCULATOR ────────────────────────────────────────────────────
+
+router.get('/calculator/state', async (req, res) => {
+  try {
+    const shops = await prisma.sharedAmexFoodShop.findMany({ orderBy: { date: 'asc' } })
+    const state = await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
+    res.json({ shops, partnerStatementAmount: state?.partnerStatementAmount || 0 })
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.post('/calculator/shops', async (req, res) => {
+  try {
+    const { vendorName, date, totalAmount, payerName, payerCoveredAmount } = req.body
+    if (!vendorName) return res.status(400).json({ error: 'Vendor name is required' })
+    const item = await prisma.sharedAmexFoodShop.create({
+      data: {
+        vendorName,
+        date: date ? new Date(date) : new Date(),
+        totalAmount: Number(totalAmount) || 0,
+        payerName: payerName || 'Me',
+        payerCoveredAmount: Number(payerCoveredAmount) || 0
+      }
+    })
+    res.status(201).json(item)
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.delete('/calculator/shops/:id', async (req, res) => {
+  try {
+    await prisma.sharedAmexFoodShop.delete({ where: { id: req.params.id } })
+    res.json({ message: 'Deleted' })
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.delete('/calculator/shops', async (req, res) => {
+  try {
+    await prisma.sharedAmexFoodShop.deleteMany({})
+    await prisma.sharedAmexState.upsert({
+      where: { id: 'singleton' },
+      update: { partnerStatementAmount: 0 },
+      create: { id: 'singleton', partnerStatementAmount: 0 }
+    })
+    res.json({ message: 'Cleared' })
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.put('/calculator/statement', async (req, res) => {
+  try {
+    const { amount } = req.body
+    const state = await prisma.sharedAmexState.upsert({
+      where: { id: 'singleton' },
+      update: { partnerStatementAmount: Number(amount) || 0 },
+      create: { id: 'singleton', partnerStatementAmount: Number(amount) || 0 }
+    })
+    res.json(state)
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 export default router

@@ -406,3 +406,25 @@ model NonAmexExpense {
 
   @@map("non_amex_expenses")
 }
+
+// ── Shared Calculator ─────────────────────────────────────────────────────────
+
+model SharedAmexFoodShop {
+  id                 String   @id @default(cuid())
+  vendorName         String   @map("vendor_name")
+  date               DateTime @default(now())
+  totalAmount        Float    @map("total_amount")
+  payerName          String   @map("payer_name")
+  payerCoveredAmount Float    @map("payer_covered_amount")
+  createdAt          DateTime @default(now()) @map("created_at")
+
+  @@map("shared_amex_food_shops")
+}
+
+model SharedAmexState {
+  id                     String   @id @default("singleton")
+  partnerStatementAmount Float    @default(0) @map("partner_statement_amount")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@map("shared_amex_state")
+}
