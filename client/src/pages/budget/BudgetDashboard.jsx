@@ -1,8 +1,9 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Wallet, PieChart as PieChartIcon, CreditCard, Plus, Trash2, 
-  PoundSterling, ShoppingCart, Repeat, Landmark
+  PoundSterling, ShoppingCart, Repeat, Landmark, Pencil, GripVertical
 } from 'lucide-react';
+import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { motion, AnimatePresence } from 'motion/react';
 import * as api from '../../lib/budgetApi';
 import { getDebtCards } from '../../lib/debtApi';
@@ -141,7 +142,7 @@ export default function BudgetDashboard() {
           {/* Overview Dashboard */}
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
             <div className="lg:col-span-2 bg-slate-900 rounded-[2rem] p-8 text-white shadow-xl shadow-slate-200 relative overflow-hidden flex flex-col justify-center">
-              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
+              <div className="absolute top-0 right-0 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
               
               <div className="relative z-10 flex flex-col md:flex-row items-center gap-10">
                 <div className="flex-1">
@@ -218,7 +219,7 @@ export default function BudgetDashboard() {
 
           {/* Amex Tracking Area */}
           <div className="bg-indigo-950 rounded-[2rem] p-8 text-white shadow-xl overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4"></div>
+            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
             
             <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
               <div className="flex items-center gap-3">
@@ -433,10 +434,16 @@ function CategoryList({ data, refresh }) {
 }
 
 function SharedBillList({ data, categories, refresh }) {
+  const [items, setItems] = useState(data);
+  useEffect(() => { setItems(data); }, [data]);
+
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [myShare, setMyShare] = useState('0.5');
   const [categoryId, setCategoryId] = useState('');
+
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', amount: '', myShare: '0.5', categoryId: '' });
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -445,29 +452,101 @@ function SharedBillList({ data, categories, refresh }) {
     setName(''); setAmount(''); refresh();
   };
 
+  const handleUpdate = async (e, id) => {
+    e.preventDefault();
+    if (!editForm.name || !editForm.amount) return;
+    await api.updateSharedBill(id, editForm);
+    setEditingId(null);
+    refresh();
+  };
+
+  const handleDragEnd = async (result) => {
+    if (!result.destination) return;
+    const startIndex = result.source.index;
+    const endIndex = result.destination.index;
+    if (startIndex === endIndex) return;
+
+    const newItems = Array.from(items);
+    const [removed] = newItems.splice(startIndex, 1);
+    newItems.splice(endIndex, 0, removed);
+    
+    setItems(newItems);
+    
+    const updates = newItems.map((item, index) => ({ id: item.id, sortOrder: index }));
+    await api.reorderSharedBills(updates);
+    refresh();
+  };
+
   return (
     <div className="space-y-3">
-      {data.map(b => (
-        <div key={b.id} className="flex flex-col sm:flex-row sm:items-center justify-between group p-3 bg-slate-50 rounded-xl border border-slate-100">
-          <div>
-             <span className="text-sm font-bold text-slate-700 block">{b.name}</span>
-             {b.category && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{b.category.name}</span>}
-          </div>
-          <div className="flex items-center gap-4 mt-2 sm:mt-0">
-            <div className="text-right">
-              <p className="text-[10px] text-slate-400 font-bold uppercase">Full Bill</p>
-              <p className="font-mono text-xs">{formatCurrency(b.amount)}</p>
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="shared-bills">
+          {(provided) => (
+            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3">
+              {items.map((b, index) => (
+                <Draggable key={b.id} draggableId={b.id} index={index}>
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex flex-col sm:flex-row sm:items-center justify-between group p-3 bg-slate-50 rounded-xl border border-slate-100 bg-white">
+                      
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div {...provided.dragHandleProps} className="text-slate-400 cursor-grab opacity-50 hover:opacity-100 flex-shrink-0">
+                          <GripVertical size={16} />
+                        </div>
+                        
+                        {editingId === b.id ? (
+                          <form onSubmit={(e) => handleUpdate(e, b.id)} className="flex flex-wrap gap-2 w-full pr-2">
+                            <input value={editForm.name} onChange={e=>setEditForm({...editForm, name: e.target.value})} className="flex-1 min-w-[120px] bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="Name" />
+                            <input type="number" value={editForm.amount} onChange={e=>setEditForm({...editForm, amount: e.target.value})} className="w-16 bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="£" />
+                            <select value={editForm.myShare} onChange={e=>setEditForm({...editForm, myShare: e.target.value})} className="bg-white text-xs px-1 py-1 rounded border border-slate-200 outline-none">
+                              <option value="0.5">50%</option>
+                              <option value="1">100%</option>
+                              <option value="0.33">33%</option>
+                            </select>
+                            <select value={editForm.categoryId} onChange={e=>setEditForm({...editForm, categoryId: e.target.value})} className="bg-white text-xs px-1 py-1 rounded border border-slate-200 outline-none">
+                              <option value="">None</option>
+                              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <button type="submit" className="bg-emerald-600 text-white px-2 py-1 rounded text-xs">Save</button>
+                            <button type="button" onClick={() => setEditingId(null)} className="text-slate-400 hover:text-slate-600 text-xs px-1">Cancel</button>
+                          </form>
+                        ) : (
+                          <div className="flex-1">
+                            <span className="text-sm font-bold text-slate-700 block">{b.name}</span>
+                            {b.category && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{b.category.name}</span>}
+                          </div>
+                        )}
+                      </div>
+
+                      {editingId !== b.id && (
+                        <div className="flex items-center gap-4 mt-2 sm:mt-0 pl-6 sm:pl-0 shrink-0">
+                          <div className="text-right">
+                            <p className="text-[10px] text-slate-400 font-bold uppercase">Full Bill</p>
+                            <p className="font-mono text-xs">{formatCurrency(b.amount)}</p>
+                          </div>
+                          <div className="text-right border-l border-slate-200 pl-4">
+                            <p className="text-[10px] text-emerald-600 font-bold uppercase">My Half ({(b.myShare*100).toFixed(0)}%)</p>
+                            <p className="font-mono font-bold text-sm text-emerald-700">{formatCurrency(b.amount * b.myShare)}</p>
+                          </div>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                            <button onClick={() => { setEditingId(b.id); setEditForm({ name: b.name, amount: b.amount, myShare: b.myShare.toString(), categoryId: b.categoryId || '' }); }} className="text-slate-300 hover:text-indigo-500 p-1">
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => api.deleteSharedBill(b.id).then(refresh)} className="text-slate-300 hover:text-red-500 p-1">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
             </div>
-            <div className="text-right border-l border-slate-200 pl-4">
-              <p className="text-[10px] text-emerald-600 font-bold uppercase">My Half ({(b.myShare*100).toFixed(0)}%)</p>
-              <p className="font-mono font-bold text-sm text-emerald-700">{formatCurrency(b.amount * b.myShare)}</p>
-            </div>
-            <button onClick={() => api.deleteSharedBill(b.id).then(refresh)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </div>
-      ))}
+          )}
+        </Droppable>
+      </DragDropContext>
+      
       <form onSubmit={handleAdd} className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 mt-2">
         <input placeholder="Bill Name" value={name} onChange={e=>setName(e.target.value)} className="flex-1 min-w-[120px] bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none" />
         <input placeholder="Full £" type="number" value={amount} onChange={e=>setAmount(e.target.value)} className="w-20 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none" />
@@ -487,10 +566,16 @@ function SharedBillList({ data, categories, refresh }) {
 }
 
 function ExpenseList({ data, categories, refresh }) {
+  const [items, setItems] = useState(data);
+  useEffect(() => { setItems(data); }, [data]);
+
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [isAmex, setIsAmex] = useState(false);
   const [categoryId, setCategoryId] = useState('');
+
+  const [editingId, setEditingId] = useState(null);
+  const [editForm, setEditForm] = useState({ name: '', amount: '', isAmex: false, categoryId: '' });
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -499,25 +584,96 @@ function ExpenseList({ data, categories, refresh }) {
     setName(''); setAmount(''); setIsAmex(false); refresh();
   };
 
+  const handleUpdate = async (e, id) => {
+    e.preventDefault();
+    if (!editForm.name || !editForm.amount) return;
+    await api.updateExpense(id, editForm);
+    setEditingId(null);
+    refresh();
+  };
+
+  const handleDragEnd = async (result) => {
+    if (!result.destination) return;
+    const startIndex = result.source.index;
+    const endIndex = result.destination.index;
+    if (startIndex === endIndex) return;
+
+    const newItems = Array.from(items);
+    const [removed] = newItems.splice(startIndex, 1);
+    newItems.splice(endIndex, 0, removed);
+    
+    setItems(newItems);
+    
+    const updates = newItems.map((item, index) => ({ id: item.id, sortOrder: index }));
+    await api.reorderExpenses(updates);
+    refresh();
+  };
+
   return (
     <div className="space-y-3">
-      {data.map(e => (
-        <div key={e.id} className="flex justify-between items-center group p-3 bg-slate-50 rounded-xl border border-slate-100">
-          <div>
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-slate-700">{e.name}</span>
-              {e.isAmex && <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Amex</span>}
+      <DragDropContext onDragEnd={handleDragEnd}>
+        <Droppable droppableId="expenses">
+          {(provided) => (
+            <div {...provided.droppableProps} ref={provided.innerRef} className="space-y-3">
+              {items.map((e, index) => (
+                <Draggable key={e.id} draggableId={e.id} index={index}>
+                  {(provided) => (
+                    <div ref={provided.innerRef} {...provided.draggableProps} className="flex flex-col sm:flex-row sm:items-center justify-between group p-3 bg-slate-50 rounded-xl border border-slate-100 bg-white">
+                      
+                      <div className="flex items-center gap-2 flex-1 min-w-0">
+                        <div {...provided.dragHandleProps} className="text-slate-400 cursor-grab opacity-50 hover:opacity-100 flex-shrink-0">
+                          <GripVertical size={16} />
+                        </div>
+
+                        {editingId === e.id ? (
+                          <form onSubmit={(ev) => handleUpdate(ev, e.id)} className="flex flex-wrap gap-2 w-full pr-2 items-center">
+                            <input value={editForm.name} onChange={ev=>setEditForm({...editForm, name: ev.target.value})} className="flex-1 min-w-[120px] bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="Name" />
+                            <input type="number" value={editForm.amount} onChange={ev=>setEditForm({...editForm, amount: ev.target.value})} className="w-16 bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="£" />
+                            <label className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-500">
+                              <input type="checkbox" checked={editForm.isAmex} onChange={ev=>setEditForm({...editForm, isAmex: ev.target.checked})} />
+                              Amex
+                            </label>
+                            <select value={editForm.categoryId} onChange={ev=>setEditForm({...editForm, categoryId: ev.target.value})} className="bg-white text-xs px-1 py-1 rounded border border-slate-200 outline-none">
+                              <option value="">None</option>
+                              {categories.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+                            </select>
+                            <button type="submit" className="bg-emerald-600 text-white px-2 py-1 rounded text-xs">Save</button>
+                            <button type="button" onClick={() => setEditingId(null)} className="text-slate-400 hover:text-slate-600 text-xs px-1">Cancel</button>
+                          </form>
+                        ) : (
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2">
+                              <span className="text-sm font-bold text-slate-700">{e.name}</span>
+                              {e.isAmex && <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Amex</span>}
+                            </div>
+                            {e.category && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{e.category.name}</span>}
+                          </div>
+                        )}
+                      </div>
+
+                      {editingId !== e.id && (
+                        <div className="flex items-center gap-4 mt-2 sm:mt-0 pl-6 sm:pl-0 shrink-0">
+                          <span className="font-mono font-bold text-slate-800">{formatCurrency(e.amount)}</span>
+                          <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
+                            <button onClick={() => { setEditingId(e.id); setEditForm({ name: e.name, amount: e.amount, isAmex: e.isAmex, categoryId: e.categoryId || '' }); }} className="text-slate-300 hover:text-indigo-500 p-1">
+                              <Pencil size={14} />
+                            </button>
+                            <button onClick={() => api.deleteExpense(e.id).then(refresh)} className="text-slate-300 hover:text-red-500 p-1">
+                              <Trash2 size={16} />
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </Draggable>
+              ))}
+              {provided.placeholder}
             </div>
-            {e.category && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{e.category.name}</span>}
-          </div>
-          <div className="flex items-center gap-4">
-            <span className="font-mono font-bold text-slate-800">{formatCurrency(e.amount)}</span>
-            <button onClick={() => api.deleteExpense(e.id).then(refresh)} className="text-slate-300 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity">
-              <Trash2 size={16} />
-            </button>
-          </div>
-        </div>
-      ))}
+          )}
+        </Droppable>
+      </DragDropContext>
+      
       <form onSubmit={handleAdd} className="flex flex-wrap gap-2 pt-2 border-t border-slate-100 mt-2">
         <input placeholder="Expense Name" value={name} onChange={e=>setName(e.target.value)} className="flex-1 min-w-[120px] bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none" />
         <input placeholder="£" type="number" value={amount} onChange={e=>setAmount(e.target.value)} className="w-20 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none" />

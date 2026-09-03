@@ -25,12 +25,12 @@ router.get('/all', async (req, res) => {
       prisma.budgetSharedBill.findMany({ 
         where: { ownerId: userId }, 
         include: { category: true },
-        orderBy: { createdAt: 'asc' } 
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
       }),
       prisma.budgetExpense.findMany({ 
         where: { ownerId: userId }, 
         include: { category: true },
-        orderBy: { createdAt: 'asc' } 
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
       }),
       prisma.amexRecurring.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
       prisma.amexGroceryShop.findMany({ where: { ownerId: userId }, orderBy: { date: 'desc' } }),
@@ -185,6 +185,22 @@ router.delete('/shared-bills/:id', async (req, res) => {
   }
 })
 
+router.put('/shared-bills/reorder/batch', async (req, res) => {
+  try {
+    const { items } = req.body // array of { id, sortOrder }
+    const updates = items.map(item => 
+      prisma.budgetSharedBill.update({
+        where: { id: item.id, ownerId: req.user.userId },
+        data: { sortOrder: item.sortOrder }
+      })
+    )
+    await prisma.$transaction(updates)
+    res.json({ message: 'Reordered' })
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 // ── EXPENSES ──────────────────────────────────────────────────────────────────
 
 router.post('/expenses', async (req, res) => {
@@ -230,6 +246,22 @@ router.delete('/expenses/:id', async (req, res) => {
   try {
     await prisma.budgetExpense.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
     res.json({ message: 'Deleted' })
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.put('/expenses/reorder/batch', async (req, res) => {
+  try {
+    const { items } = req.body // array of { id, sortOrder }
+    const updates = items.map(item => 
+      prisma.budgetExpense.update({
+        where: { id: item.id, ownerId: req.user.userId },
+        data: { sortOrder: item.sortOrder }
+      })
+    )
+    await prisma.$transaction(updates)
+    res.json({ message: 'Reordered' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }

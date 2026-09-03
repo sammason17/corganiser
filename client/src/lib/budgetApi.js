@@ -46,6 +46,10 @@ export async function deleteSharedBill(id) {
   const { data } = await api.delete(`/budget/shared-bills/${id}`)
   return data
 }
+export async function reorderSharedBills(items) {
+  const { data } = await api.put('/budget/shared-bills/reorder/batch', { items })
+  return data
+}
 
 // Expenses
 export async function createExpense(payload) {
@@ -58,6 +62,10 @@ export async function updateExpense(id, payload) {
 }
 export async function deleteExpense(id) {
   const { data } = await api.delete(`/budget/expenses/${id}`)
+  return data
+}
+export async function reorderExpenses(items) {
+  const { data } = await api.put('/budget/expenses/reorder/batch', { items })
   return data
 }
 

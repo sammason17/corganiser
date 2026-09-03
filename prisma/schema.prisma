@@ -339,6 +339,7 @@ model BudgetSharedBill {
   name      String
   amount    Float
   myShare   Float    @default(0.5) @map("my_share")
+  sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
 
   categoryId String? @map("category_id")
@@ -355,6 +356,7 @@ model BudgetExpense {
   name      String
   amount    Float
   isAmex    Boolean  @default(false) @map("is_amex")
+  sortOrder Int      @default(0) @map("sort_order")
   createdAt DateTime @default(now()) @map("created_at")
 
   categoryId String? @map("category_id")
