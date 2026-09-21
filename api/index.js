@@ -104,7 +104,7 @@ app.post('/api/auth/register', authLimiter, async (req, res) => {
     const passwordHash = await bcrypt.hash(password, 12)
     const user = await prisma.user.create({
       data: { name, email, passwordHash },
-      select: { id: true, name: true, email: true, createdAt: true },
+      select: { id: true, name: true, email: true, createdAt: true, weatherPostcode: true, weatherLat: true, weatherLng: true },
     })
     const token = signToken({ userId: user.id, email: user.email, name: user.name })
     return res.status(201).json({ user, token })
@@ -123,7 +123,7 @@ app.post('/api/auth/login', authLimiter, async (req, res) => {
     if (!user || !(await bcrypt.compare(password, user.passwordHash)))
       return res.status(401).json({ error: 'Invalid email or password' })
     const token = signToken({ userId: user.id, email: user.email, name: user.name })
-    return res.json({ token, user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt } })
+    return res.json({ token, user: { id: user.id, name: user.name, email: user.email, createdAt: user.createdAt, weatherPostcode: user.weatherPostcode, weatherLat: user.weatherLat, weatherLng: user.weatherLng } })
   } catch (err) {
     console.error('[login]', err)
     return res.status(500).json({ error: 'Internal server error' })

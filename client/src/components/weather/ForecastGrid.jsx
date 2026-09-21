@@ -1,3 +1,4 @@
+import { Fragment } from 'react'
 import WeatherIcon from './WeatherIcon'
 
 const DAYS_SHORT = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat']
@@ -31,11 +32,11 @@ export default function ForecastGrid({ forecasts }) {
           <tr className="text-xs text-gray-500 uppercase tracking-wide">
             <th className="pb-2 px-3 border-b border-gray-200"></th>
             {forecasts.map(f => (
-              <optgroup key={f.model + '-group'} className="contents">
+              <Fragment key={f.model + '-group'}>
                 <th key={f.model + '-temp'} className="py-2 px-2 text-center border-l border-b border-gray-200 font-medium">Temp</th>
                 <th key={f.model + '-rain'} className="py-2 px-2 text-center border-b border-gray-200 font-medium">Rain %</th>
                 <th key={f.model + '-cloud'} className="py-2 px-2 text-center border-b border-gray-200 font-medium">Cloud</th>
-              </optgroup>
+              </Fragment>
             ))}
           </tr>
         </thead>
@@ -55,7 +56,7 @@ export default function ForecastGrid({ forecasts }) {
                   const day = f.days[i]
                   if (!day) return <td key={f.model} colSpan={3} className="border-l border-gray-100 text-center text-gray-400">N/A</td>
                   return (
-                    <optgroup key={f.model + '-data'} className="contents">
+                    <Fragment key={f.model + '-data'}>
                       <td key={f.model + '-temp'} className="py-3 px-3 text-center border-l border-gray-100">
                         <div className="flex flex-col items-center gap-1">
                           <WeatherIcon precipProb={day.precipProb} cloudCover={day.cloudCover} />
@@ -71,7 +72,7 @@ export default function ForecastGrid({ forecasts }) {
                       <td key={f.model + '-cloud'} className="py-3 px-3 text-center text-gray-400">
                         {day.cloudCover}%
                       </td>
-                    </optgroup>
+                    </Fragment>
                   )
                 })}
               </tr>
