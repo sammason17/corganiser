@@ -14,6 +14,7 @@ import PlanBuilderPage from './pages/workout/PlanBuilderPage'
 import ActiveWorkoutPage from './pages/workout/ActiveWorkoutPage'
 import DebtFlowPage from './pages/debt/DebtFlowPage'
 import BudgetDashboard from './pages/budget/BudgetDashboard'
+import WeatherDashboard from './pages/weather/WeatherDashboard'
 
 function RequireAuth({ children }) {
   const { user } = useAuth()
@@ -46,6 +47,7 @@ export default function App() {
         <Route path="workout/active/:dayId" element={<ActiveWorkoutPage />} />
         <Route path="debt" element={<DebtFlowPage />} />
         <Route path="budget" element={<BudgetDashboard />} />
+        <Route path="weather" element={<WeatherDashboard />} />
       </Route>
 
       <Route path="*" element={<Navigate to="/" replace />} />
