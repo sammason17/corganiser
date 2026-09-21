@@ -68,12 +68,29 @@ export async function fetchSeasonalForecast({ lat, lng }) {
 }
 
 export async function geocodePostcode(postcode) {
+  // Try UK Postcodes API first
+  try {
+    const cleanPostcode = postcode.replace(/\s+/g, '');
+    const ukRes = await fetch(`https://api.postcodes.io/postcodes/${encodeURIComponent(cleanPostcode)}`);
+    if (ukRes.ok) {
+      const ukData = await ukRes.json();
+      return {
+        lat: ukData.result.latitude,
+        lng: ukData.result.longitude,
+        name: ukData.result.postcode,
+      };
+    }
+  } catch (err) {
+    // Ignore and fallback
+  }
+
+  // Fallback to Open-Meteo Geocoding for city names or non-UK locations
   const url = `https://geocoding-api.open-meteo.com/v1/search?name=${encodeURIComponent(postcode)}&count=1&format=json`
   const res = await fetch(url)
   if (!res.ok) throw new Error('Failed to fetch coordinates')
   const data = await res.json()
   if (!data.results || data.results.length === 0) {
-    throw new Error('Postcode not found')
+    throw new Error('Postcode or location not found')
   }
   const result = data.results[0]
   return {
