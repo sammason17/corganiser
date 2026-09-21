@@ -15,6 +15,10 @@ model User {
   amexAllowance Float    @default(0) @map("amex_allowance")
   createdAt     DateTime @default(now()) @map("created_at")
 
+  weatherPostcode String? @map("weather_postcode")
+  weatherLat      Float?  @map("weather_lat")
+  weatherLng      Float?  @map("weather_lng")
+
   // Owned items
   tasks      Task[]
   categories Category[]

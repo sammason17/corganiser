@@ -7,6 +7,7 @@ const navItems = [
   { to: '/workout',    label: 'Workouts',   icon: '🏋' },
   { to: '/budget',     label: 'Budget',     icon: '🏦' },
   { to: '/debt',       label: 'Debt',       icon: '💳' },
+  { to: '/weather',    label: 'Weather',    icon: '🌤️' },
   { to: '/settings',   label: 'Settings',   icon: '⚙' },
 ]
 
@@ -77,14 +78,14 @@ export default function Layout() {
       </main>
 
       {/* Bottom tab bar — mobile only */}
-      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 flex md:hidden">
+      <nav className="fixed bottom-0 inset-x-0 z-40 bg-white border-t border-gray-200 flex md:hidden overflow-x-auto [scrollbar-width:none] [-ms-overflow-style:none] [&::-webkit-scrollbar]:hidden">
         {navItems.map(({ to, label, icon }) => (
           <NavLink
             key={to}
             to={to}
             end={to === '/'}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center justify-center py-2 gap-0.5 transition-colors ${
+              `flex-1 flex flex-col items-center justify-center py-2 px-1 min-w-[72px] gap-0.5 transition-colors ${
                 isActive ? 'text-primary-600' : 'text-gray-400'
               }`
             }

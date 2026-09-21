@@ -155,7 +155,7 @@ app.get('/api/users/me', requireAuth, async (req, res) => {
   try {
     const user = await prisma.user.findUnique({
       where: { id: req.user.userId },
-      select: { id: true, name: true, email: true, createdAt: true },
+      select: { id: true, name: true, email: true, createdAt: true, weatherPostcode: true, weatherLat: true, weatherLng: true },
     })
     if (!user) return res.status(404).json({ error: 'User not found' })
     return res.json(user)
@@ -167,15 +167,21 @@ app.get('/api/users/me', requireAuth, async (req, res) => {
 
 app.put('/api/users/me', requireAuth, async (req, res) => {
   try {
-    const { name, email } = req.body
+    const { name, email, weatherPostcode, weatherLat, weatherLng } = req.body
     if (email) {
       const existing = await prisma.user.findFirst({ where: { email, NOT: { id: req.user.userId } } })
       if (existing) return res.status(409).json({ error: 'Email already in use' })
     }
     const user = await prisma.user.update({
       where: { id: req.user.userId },
-      data: { ...(name !== undefined && { name }), ...(email !== undefined && { email }) },
-      select: { id: true, name: true, email: true, createdAt: true },
+      data: {
+        ...(name !== undefined && { name }),
+        ...(email !== undefined && { email }),
+        ...(weatherPostcode !== undefined && { weatherPostcode }),
+        ...(weatherLat !== undefined && { weatherLat }),
+        ...(weatherLng !== undefined && { weatherLng }),
+      },
+      select: { id: true, name: true, email: true, createdAt: true, weatherPostcode: true, weatherLat: true, weatherLng: true },
     })
     return res.json(user)
   } catch (err) {
