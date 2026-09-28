@@ -956,7 +956,7 @@ function AmexStatementCalculator() {
       <div className="relative z-10 flex flex-col lg:flex-row gap-10">
         
         {/* Left Side: Shops List and Add Form */}
-        <div className="flex-1 border-r border-white/10 pr-0 lg:pr-10">
+        <div className="flex-1 lg:border-r border-white/10 pr-0 lg:pr-10">
           <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
              <div className="flex items-center gap-3">
                <Calculator size={24} className="text-blue-400" />
