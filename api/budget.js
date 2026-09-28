@@ -486,4 +486,39 @@ router.put('/calculator/statement', async (req, res) => {
   }
 })
 
+router.get('/calculator/exports', async (req, res) => {
+  try {
+    const exports = await prisma.sharedAmexExport.findMany({ orderBy: { createdAt: 'desc' } })
+    res.json(exports)
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.post('/calculator/exports', async (req, res) => {
+  try {
+    const { name } = req.body
+    if (!name) return res.status(400).json({ error: 'Name is required' })
+
+    const existing = await prisma.sharedAmexExport.findUnique({ where: { name } })
+    if (existing) return res.status(409).json({ error: 'An export with this name already exists' })
+
+    const shops = await prisma.sharedAmexFoodShop.findMany({ orderBy: { date: 'asc' } })
+    const state = await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
+    const partnerStatementAmount = state?.partnerStatementAmount || 0
+
+    const newExport = await prisma.sharedAmexExport.create({
+      data: {
+        name,
+        partnerStatementAmount,
+        shopsData: shops
+      }
+    })
+    res.status(201).json(newExport)
+  } catch (err) {
+    console.error(err)
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 export default router

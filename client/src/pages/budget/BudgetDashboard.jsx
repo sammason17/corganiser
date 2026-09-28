@@ -861,8 +861,10 @@ function NonAmexExpenseList({ data, refresh }) {
   );
 }
 function AmexStatementCalculator() {
-  const [shops, setShops] = useState([]);
-  const [partnerStatement, setPartnerStatement] = useState(0);
+  const [liveShops, setLiveShops] = useState([]);
+  const [livePartnerStatement, setLivePartnerStatement] = useState(0);
+  const [exportsList, setExportsList] = useState([]);
+  const [selectedExportId, setSelectedExportId] = useState('');
   const [loading, setLoading] = useState(true);
 
   // Form State
@@ -873,9 +875,13 @@ function AmexStatementCalculator() {
 
   const fetchData = async () => {
     try {
-      const data = await api.getCalculatorState();
-      setShops(data.shops);
-      setPartnerStatement(data.partnerStatementAmount);
+      const [stateData, exportsData] = await Promise.all([
+        api.getCalculatorState(),
+        api.getCalculatorExports()
+      ]);
+      setLiveShops(stateData.shops);
+      setLivePartnerStatement(stateData.partnerStatementAmount);
+      setExportsList(exportsData);
     } catch (err) {
       console.error(err);
     } finally {
@@ -909,7 +915,25 @@ function AmexStatementCalculator() {
     }
   };
 
+  const handleExportMonth = async () => {
+    const defaultName = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).replace(' ', '-');
+    const name = window.prompt('Name this export:', defaultName);
+    if (!name) return;
+    try {
+      await api.createCalculatorExport({ name });
+      alert('Month exported successfully!');
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Failed to export');
+    }
+  };
+
   if (loading) return null;
+
+  const activeExport = exportsList.find(e => e.id === selectedExportId);
+  const isReadOnly = !!activeExport;
+  const shops = activeExport ? activeExport.shopsData : liveShops;
+  const partnerStatement = activeExport ? activeExport.partnerStatementAmount : livePartnerStatement;
 
   let partnerOwesForMyShops = 0;
   let iOweForPartnerShops = 0;
@@ -933,34 +957,57 @@ function AmexStatementCalculator() {
         
         {/* Left Side: Shops List and Add Form */}
         <div className="flex-1 border-r border-white/10 pr-0 lg:pr-10">
-          <div className="flex items-center justify-between mb-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
              <div className="flex items-center gap-3">
                <Calculator size={24} className="text-blue-400" />
                <h2 className="text-xl font-black tracking-tight">Amex Statement Calculator</h2>
              </div>
-             <button onClick={handleClearMonth} className="text-[10px] text-red-400 hover:text-white font-bold uppercase tracking-widest bg-red-400/10 hover:bg-red-500/50 px-3 py-1.5 rounded transition-colors">
-               Clear Month
-             </button>
+             
+             <div className="flex items-center gap-2">
+               <select 
+                 value={selectedExportId} 
+                 onChange={e => setSelectedExportId(e.target.value)}
+                 className="bg-white/10 text-white text-xs px-2 py-1.5 rounded outline-none border border-white/10 focus:border-blue-400"
+               >
+                 <option value="">Current Month</option>
+                 {exportsList.map(exp => (
+                   <option key={exp.id} value={exp.id}>{exp.name}</option>
+                 ))}
+               </select>
+
+               {!isReadOnly && (
+                 <>
+                   <button onClick={handleExportMonth} className="text-[10px] text-blue-400 hover:text-white font-bold uppercase tracking-widest bg-blue-400/10 hover:bg-blue-500/50 px-3 py-1.5 rounded transition-colors">
+                     Export Month
+                   </button>
+                   <button onClick={handleClearMonth} className="text-[10px] text-red-400 hover:text-white font-bold uppercase tracking-widest bg-red-400/10 hover:bg-red-500/50 px-3 py-1.5 rounded transition-colors">
+                     Clear Month
+                   </button>
+                 </>
+               )}
+             </div>
           </div>
 
-          <div className="bg-white/5 rounded-2xl p-6 mb-6">
-             <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4">Add Grocery Shop</h3>
-             <form onSubmit={handleAdd} className="flex flex-col gap-3">
-               <div className="flex flex-col sm:flex-row gap-2">
-                 <input placeholder="Vendor (e.g. Tesco)" value={vendorName} onChange={e=>setVendorName(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400 min-w-[100px]" />
-                 <input placeholder="Total £" type="number" step="0.01" value={totalAmount} onChange={e=>setTotalAmount(e.target.value)} className="w-full sm:w-24 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400" />
-               </div>
-               <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                 <span className="text-xs text-slate-400 font-bold whitespace-nowrap hidden sm:block">Who Paid?</span>
-                 <select value={payerName} onChange={e=>setPayerName(e.target.value)} className="w-full sm:w-28 bg-white/10 text-white text-xs px-2 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400">
-                   <option value="Sam">Sam</option>
-                   <option value="Lauren">Lauren</option>
-                 </select>
-                 <input placeholder={`Amount ${payerName} Covers £`} type="number" step="0.01" value={payerCoveredAmount} onChange={e=>setPayerCoveredAmount(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400 min-w-[100px]" />
-               </div>
-               <button type="submit" className="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 text-xs font-bold uppercase tracking-widest mt-1">Add Shop</button>
-             </form>
-          </div>
+          {!isReadOnly && (
+            <div className="bg-white/5 rounded-2xl p-6 mb-6">
+               <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4">Add Grocery Shop</h3>
+               <form onSubmit={handleAdd} className="flex flex-col gap-3">
+                 <div className="flex flex-col sm:flex-row gap-2">
+                   <input placeholder="Vendor (e.g. Tesco)" value={vendorName} onChange={e=>setVendorName(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400 min-w-[100px]" />
+                   <input placeholder="Total £" type="number" step="0.01" value={totalAmount} onChange={e=>setTotalAmount(e.target.value)} className="w-full sm:w-24 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400" />
+                 </div>
+                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
+                   <span className="text-xs text-slate-400 font-bold whitespace-nowrap hidden sm:block">Who Paid?</span>
+                   <select value={payerName} onChange={e=>setPayerName(e.target.value)} className="w-full sm:w-28 bg-white/10 text-white text-xs px-2 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400">
+                     <option value="Sam">Sam</option>
+                     <option value="Lauren">Lauren</option>
+                   </select>
+                   <input placeholder={`Amount ${payerName} Covers £`} type="number" step="0.01" value={payerCoveredAmount} onChange={e=>setPayerCoveredAmount(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400 min-w-[100px]" />
+                 </div>
+                 <button type="submit" className="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 text-xs font-bold uppercase tracking-widest mt-1">Add Shop</button>
+               </form>
+            </div>
+          )}
 
           <div className="space-y-3">
              {shops.length === 0 && <p className="text-slate-500 text-xs text-center py-4">No shops added this month.</p>}
@@ -983,9 +1030,11 @@ function AmexStatementCalculator() {
                      <p className="text-[9px] text-slate-400 font-bold uppercase">{shop.payerName === 'Sam' ? 'Lauren Owes' : 'Sam Owes'}</p>
                      <p className="font-mono text-xs font-bold text-emerald-400">{formatCurrency(shop.totalAmount - shop.payerCoveredAmount)}</p>
                    </div>
-                   <button onClick={() => api.deleteSharedAmexShop(shop.id).then(fetchData)} className="text-slate-500 hover:text-red-400 sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 sm:p-0">
-                     <Trash2 size={16} />
-                   </button>
+                   {!isReadOnly && (
+                     <button onClick={() => api.deleteSharedAmexShop(shop.id).then(fetchData)} className="text-slate-500 hover:text-red-400 sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 sm:p-0">
+                       <Trash2 size={16} />
+                     </button>
+                   )}
                  </div>
                </div>
              ))}
@@ -1002,14 +1051,15 @@ function AmexStatementCalculator() {
                <input 
                  type="number"
                  step="0.01"
+                 disabled={isReadOnly}
                  value={partnerStatement || ''}
                  onChange={(e) => {
-                   setPartnerStatement(Number(e.target.value));
+                   setLivePartnerStatement(Number(e.target.value));
                  }}
                  onBlur={(e) => {
                    api.updateCalculatorStatement(Number(e.target.value) || 0);
                  }}
-                 className="w-full bg-slate-900/50 text-white font-mono font-bold text-3xl px-4 py-4 pl-10 rounded-xl border border-white/10 outline-none focus:border-blue-400"
+                 className="w-full bg-slate-900/50 text-white font-mono font-bold text-3xl px-4 py-4 pl-10 rounded-xl border border-white/10 outline-none focus:border-blue-400 disabled:opacity-75 disabled:cursor-not-allowed"
                />
              </div>
            </div>

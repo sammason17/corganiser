@@ -146,4 +146,12 @@ export async function updateCalculatorStatement(amount) {
   const { data } = await api.put('/budget/calculator/statement', { amount })
   return data
 }
+export async function getCalculatorExports() {
+  const { data } = await api.get('/budget/calculator/exports')
+  return data
+}
+export async function createCalculatorExport(payload) {
+  const { data } = await api.post('/budget/calculator/exports', payload)
+  return data
+}
 

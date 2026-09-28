@@ -432,3 +432,13 @@ model SharedAmexState {
 
   @@map("shared_amex_state")
 }
+
+model SharedAmexExport {
+  id                     String   @id @default(cuid())
+  name                   String   @unique
+  partnerStatementAmount Float    @map("partner_statement_amount")
+  shopsData              Json     @map("shops_data")
+  createdAt              DateTime @default(now()) @map("created_at")
+
+  @@map("shared_amex_exports")
+}
