@@ -53,7 +53,6 @@ router.get('/status', async (req, res) => {
         isConnected: false,
         isActive: false,
         cardAccountId: null,
-        laurenSupplementaryCardId: null,
         lastProcessedStatementDate: null,
         consentDaysRemaining: null,
       })
@@ -69,7 +68,6 @@ router.get('/status', async (req, res) => {
       isConnected: Boolean(config.accessToken && config.refreshToken),
       isActive: config.isActive,
       cardAccountId: config.cardAccountId,
-      laurenSupplementaryCardId: config.laurenSupplementaryCardId,
       lastKnownStatementDate: config.lastKnownStatementDate,
       lastProcessedStatementDate: config.lastProcessedStatementDate,
       consentExpiresAt: config.consentExpiresAt,
@@ -182,10 +180,7 @@ router.get('/cards', async (req, res) => {
     const { accessToken, config } = tokenData
     const cards = await getCards(accessToken)
 
-    // If cardAccountId exists, also inspect recent transactions to detect supplementary card IDs
-    let detectedSupplementaryCardIds = []
     let currentBalance = null
-
     const targetCardId = config.cardAccountId || (cards[0] ? cards[0].account_id : null)
     if (targetCardId) {
       try {
@@ -193,28 +188,11 @@ router.get('/cards', async (req, res) => {
       } catch (e) {
         console.warn('Could not fetch balance:', e.message)
       }
-
-      try {
-        // Sample transactions from last 60 days
-        const sixtyDaysAgo = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
-        const txns = await getCardTransactions(accessToken, targetCardId, sixtyDaysAgo)
-        const idSet = new Set()
-        txns.forEach(t => {
-          if (t.meta?.supplementary_card_id) {
-            idSet.add(t.meta.supplementary_card_id)
-          }
-        })
-        detectedSupplementaryCardIds = Array.from(idSet)
-      } catch (e) {
-        console.warn('Could not sample transactions:', e.message)
-      }
     }
 
     res.json({
       cards,
       selectedCardId: config.cardAccountId,
-      laurenSupplementaryCardId: config.laurenSupplementaryCardId,
-      detectedSupplementaryCardIds,
       balance: currentBalance,
     })
   } catch (err) {
@@ -225,15 +203,14 @@ router.get('/cards', async (req, res) => {
 
 /**
  * POST /api/truelayer/config
- * Update card account or Lauren's supplementary card ID
+ * Update card account selection or active status
  */
 router.post('/config', async (req, res) => {
   try {
-    const { cardAccountId, laurenSupplementaryCardId, isActive } = req.body
+    const { cardAccountId, isActive } = req.body
 
     const updateData = {}
     if (cardAccountId !== undefined) updateData.cardAccountId = cardAccountId
-    if (laurenSupplementaryCardId !== undefined) updateData.laurenSupplementaryCardId = laurenSupplementaryCardId
     if (isActive !== undefined) updateData.isActive = Boolean(isActive)
 
     const updated = await prisma.amexAutomationConfig.upsert({

@@ -878,7 +878,6 @@ function AmexStatementCalculator() {
   const [isSettling, setIsSettling] = useState(false);
   const [showTlConfig, setShowTlConfig] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState('');
-  const [selectedLaurenCardId, setSelectedLaurenCardId] = useState('');
 
   // Form State
   const [vendorName, setVendorName] = useState('');
@@ -891,7 +890,6 @@ function AmexStatementCalculator() {
       const status = await api.getTrueLayerStatus();
       setTlStatus(status);
       if (status.cardAccountId) setSelectedCardId(status.cardAccountId);
-      if (status.laurenSupplementaryCardId) setSelectedLaurenCardId(status.laurenSupplementaryCardId);
     } catch (err) {
       console.warn('Could not fetch TrueLayer status:', err);
     }
@@ -945,7 +943,6 @@ function AmexStatementCalculator() {
         const cardsData = await api.getTrueLayerCards();
         setTlCardsData(cardsData);
         if (cardsData.selectedCardId) setSelectedCardId(cardsData.selectedCardId);
-        if (cardsData.laurenSupplementaryCardId) setSelectedLaurenCardId(cardsData.laurenSupplementaryCardId);
       } catch (err) {
         console.warn('Could not load card details:', err);
       }
@@ -956,7 +953,6 @@ function AmexStatementCalculator() {
     try {
       await api.updateTrueLayerConfig({
         cardAccountId: selectedCardId,
-        laurenSupplementaryCardId: selectedLaurenCardId,
       });
       alert('TrueLayer card configuration saved!');
       setShowTlConfig(false);
@@ -1148,46 +1144,20 @@ function AmexStatementCalculator() {
               <Unlink size={12} /> Disconnect
             </button>
           </div>
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
-            <div>
-              <label className="block text-slate-400 mb-1 text-[11px] font-bold uppercase">Card Account</label>
-              <select
-                value={selectedCardId}
-                onChange={e => setSelectedCardId(e.target.value)}
-                className="w-full bg-slate-900/80 text-white text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400"
-              >
-                <option value="">Select Card</option>
-                {tlCardsData?.cards?.map(c => (
-                  <option key={c.account_id} value={c.account_id}>
-                    {c.display_name || c.name_on_card} (•••• {c.partial_card_number})
-                  </option>
-                ))}
-              </select>
-            </div>
-            <div>
-              <label className="block text-slate-400 mb-1 text-[11px] font-bold uppercase">Lauren's Supplementary Card ID</label>
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  placeholder="e.g. card_id"
-                  value={selectedLaurenCardId}
-                  onChange={e => setSelectedLaurenCardId(e.target.value)}
-                  className="flex-1 bg-slate-900/80 text-white text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400"
-                />
-                {tlCardsData?.detectedSupplementaryCardIds?.length > 0 && (
-                  <select
-                    onChange={e => setSelectedLaurenCardId(e.target.value)}
-                    className="bg-slate-900/80 text-white text-xs px-2 py-2 rounded-lg border border-white/10 outline-none"
-                    value=""
-                  >
-                    <option value="" disabled>Detected IDs</option>
-                    {tlCardsData.detectedSupplementaryCardIds.map(id => (
-                      <option key={id} value={id}>{id}</option>
-                    ))}
-                  </select>
-                )}
-              </div>
-            </div>
+          <div className="text-xs max-w-md">
+            <label className="block text-slate-400 mb-1 text-[11px] font-bold uppercase">Connected Card Account</label>
+            <select
+              value={selectedCardId}
+              onChange={e => setSelectedCardId(e.target.value)}
+              className="w-full bg-slate-900/80 text-white text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400"
+            >
+              <option value="">Select Card</option>
+              {tlCardsData?.cards?.map(c => (
+                <option key={c.account_id} value={c.account_id}>
+                  {c.display_name || c.name_on_card} (•••• {c.partial_card_number})
+                </option>
+              ))}
+            </select>
           </div>
           <div className="flex justify-end gap-2 mt-4">
             <button
