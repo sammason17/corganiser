@@ -92,8 +92,10 @@ router.get('/auth-url', (req, res) => {
  * GET /api/truelayer/callback
  * Handles OAuth callback from TrueLayer
  */
-router.get('/callback', async (req, res) => {
-  const { code, error, error_description } = req.query
+router.all('/callback', async (req, res) => {
+  const code = req.query.code || req.body?.code
+  const error = req.query.error || req.body?.error
+  const error_description = req.query.error_description || req.body?.error_description
 
   if (error) {
     console.error('[TrueLayer Callback Error]', error, error_description)
