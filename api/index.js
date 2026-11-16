@@ -5,11 +5,11 @@ import rateLimit from 'express-rate-limit'
 import bcrypt from 'bcryptjs'
 import jwt from 'jsonwebtoken'
 import { PrismaClient } from '@prisma/client'
-import workoutRouter from './workout.js'
-import debtRouter from './debt.js'
-import budgetRouter from './budget.js'
-import truelayerRouter from './truelayer.js'
-import cronRouter from './cron.js'
+import workoutRouter from '../server/routes/workout.js'
+import debtRouter from '../server/routes/debt.js'
+import budgetRouter from '../server/routes/budget.js'
+import truelayerRouter from '../server/routes/truelayer.js'
+import cronRouter from '../server/routes/cron.js'
 
 // ── Prisma ────────────────────────────────────────────────────────────────────
 const prisma = global.prisma ?? new PrismaClient()

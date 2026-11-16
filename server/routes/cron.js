@@ -1,5 +1,5 @@
 import express from 'express'
-import { run18thPrecheckReminder, checkAndRunStatementSettlement } from '../lib/settlementAutomation.js'
+import { run18thPrecheckReminder, checkAndRunStatementSettlement } from '../../lib/settlementAutomation.js'
 
 const router = express.Router()
 

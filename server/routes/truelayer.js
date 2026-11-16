@@ -1,5 +1,5 @@
 import express from 'express'
-import prisma from '../lib/prisma.js'
+import prisma from '../../lib/prisma.js'
 import {
   getAuthUrl,
   exchangeCodeForTokens,
@@ -7,8 +7,8 @@ import {
   getCards,
   getCardBalance,
   getCardTransactions
-} from '../lib/truelayer.js'
-import { checkAndRunStatementSettlement } from '../lib/settlementAutomation.js'
+} from '../../lib/truelayer.js'
+import { checkAndRunStatementSettlement } from '../../lib/settlementAutomation.js'
 
 const router = express.Router()
 

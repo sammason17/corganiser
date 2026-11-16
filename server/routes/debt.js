@@ -1,6 +1,6 @@
 import express from 'express'
-import prisma from '../lib/prisma.js'
-import { requireAuth } from '../lib/auth.js'
+import prisma from '../../lib/prisma.js'
+import { requireAuth } from '../../lib/auth.js'
 
 const router = express.Router()
 router.use(requireAuth)

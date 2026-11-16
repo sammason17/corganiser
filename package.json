@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently \"npm run dev:api\" \"npm run dev:client\"",
-    "dev:api": "nodemon --watch api --watch prisma --watch lib api/server.js",
+    "dev:api": "nodemon --watch api --watch server --watch prisma --watch lib api/server.js",
     "dev:client": "cd client && npm run dev",
     "build": "prisma generate && cd client && npm install && npm run build",
     "db:migrate": "npx prisma migrate dev",

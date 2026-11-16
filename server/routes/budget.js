@@ -1,7 +1,7 @@
 import express from 'express'
-import prisma from '../lib/prisma.js'
-import { requireAuth } from '../lib/auth.js'
-import { getUniqueExportName, executeSettlementExportAndClear } from '../lib/settlementAutomation.js'
+import prisma from '../../lib/prisma.js'
+import { requireAuth } from '../../lib/auth.js'
+import { getUniqueExportName, executeSettlementExportAndClear } from '../../lib/settlementAutomation.js'
 
 const router = express.Router()
 router.use(requireAuth)
