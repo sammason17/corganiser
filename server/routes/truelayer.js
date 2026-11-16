@@ -12,12 +12,23 @@ import { checkAndRunStatementSettlement } from '../../lib/settlementAutomation.j
 
 const router = express.Router()
 
+function getCleanBaseUrl() {
+  let url = (process.env.APP_URL || '').trim()
+  // Cleanly strip any accidental callback or sub-paths if pasted
+  url = url.replace(/\/api\/truelayer\/callback\/?$/i, '')
+           .replace(/\/api\/truelayer\/?$/i, '')
+           .replace(/\/api\/?$/i, '')
+           .replace(/\/$/, '')
+  return url
+}
+
 function getRedirectUri(req) {
   if (process.env.TRUELAYER_REDIRECT_URI) {
-    return process.env.TRUELAYER_REDIRECT_URI
+    return process.env.TRUELAYER_REDIRECT_URI.trim()
   }
-  if (process.env.APP_URL && process.env.APP_URL.startsWith('http')) {
-    return `${process.env.APP_URL.replace(/\/$/, '')}/api/truelayer/callback`
+  const base = getCleanBaseUrl()
+  if (base && base.startsWith('http')) {
+    return `${base}/api/truelayer/callback`
   }
   // Fallback to request host
   const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http'
@@ -26,8 +37,8 @@ function getRedirectUri(req) {
 }
 
 function getAppRedirectUrl(path = '/budget') {
-  const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '')
-  return `${baseUrl}${path}`
+  const base = getCleanBaseUrl()
+  return `${base}${path}`
 }
 
 /**
