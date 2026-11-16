@@ -2,7 +2,8 @@ import { useState, useEffect, useMemo } from 'react';
 import { 
   Wallet, PieChart as PieChartIcon, CreditCard, Plus, Trash2, 
   PoundSterling, ShoppingCart, Repeat, Landmark, Pencil, GripVertical, Calculator,
-  Mail, RefreshCw, CheckCircle2, Settings2, ShieldCheck, Unlink, Sparkles
+  Mail, RefreshCw, CheckCircle2, Settings2, ShieldCheck, Unlink, Sparkles,
+  ChevronDown, ChevronUp
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { motion, AnimatePresence } from 'motion/react';
@@ -218,7 +219,10 @@ export default function BudgetDashboard() {
             </Card>
           </div>
 
-          {/* Amex Tracking Area */}
+          {/* 1. Amex Statement Calculator (Shared Settlement) */}
+          <AmexStatementCalculator />
+
+          {/* 2. Amex Credit Card Projection */}
           <div className="bg-indigo-950 rounded-[2rem] p-8 text-white shadow-xl overflow-hidden relative">
             <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
             
@@ -344,8 +348,6 @@ export default function BudgetDashboard() {
                 </div>
               </div>
             </div>
-
-            <AmexStatementCalculator />
 
           </div>
 
@@ -867,6 +869,7 @@ function AmexStatementCalculator() {
   const [exportsList, setExportsList] = useState([]);
   const [selectedExportId, setSelectedExportId] = useState('');
   const [loading, setLoading] = useState(true);
+  const [showAllShops, setShowAllShops] = useState(false);
 
   // TrueLayer state
   const [tlStatus, setTlStatus] = useState(null);
@@ -1056,6 +1059,9 @@ function AmexStatementCalculator() {
   const shops = activeExport ? activeExport.shopsData : liveShops;
   const partnerStatement = activeExport ? activeExport.partnerStatementAmount : livePartnerStatement;
 
+  const sortedShops = [...shops].sort((a, b) => new Date(b.date) - new Date(a.date));
+  const visibleShops = showAllShops ? sortedShops : sortedShops.slice(0, 3);
+
   let partnerOwesForMyShops = 0;
   let iOweForPartnerShops = 0;
 
@@ -1071,8 +1077,8 @@ function AmexStatementCalculator() {
   const finalAmountPartnerOwes = partnerStatement + partnerOwesForMyShops - iOweForPartnerShops;
 
   return (
-    <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden mt-8">
-      <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none"></div>
+    <div className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
+      <div className="absolute top-0 right-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
       
       {/* Top Banner: TrueLayer Sync Status */}
       <div className="relative z-10 flex flex-wrap items-center justify-between pb-6 mb-6 border-b border-white/10 gap-4">
@@ -1200,147 +1206,263 @@ function AmexStatementCalculator() {
         </div>
       )}
 
-      <div className="relative z-10 flex flex-col lg:flex-row gap-10">
+      {/* Main Stacked Content */}
+      <div className="relative z-10 space-y-6">
         
-        {/* Left Side: Shops List and Add Form */}
-        <div className="flex-1 lg:border-r border-white/10 pr-0 lg:pr-10">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between mb-6 gap-4">
-             <div className="flex items-center gap-3">
-               <Calculator size={24} className="text-blue-400" />
-               <h2 className="text-xl font-black tracking-tight">Amex Statement Calculator</h2>
-             </div>
-             
-             <div className="flex items-center gap-2">
-               <select 
-                 value={selectedExportId} 
-                 onChange={e => setSelectedExportId(e.target.value)}
-                 className="bg-white/10 text-white text-xs px-2 py-1.5 rounded outline-none border border-white/10 focus:border-blue-400"
-               >
-                 <option value="">Current Month</option>
-                 {exportsList.map(exp => (
-                   <option key={exp.id} value={exp.id}>{exp.name}</option>
-                 ))}
-               </select>
-
-               {!isReadOnly && (
-                 <>
-                   <button
-                     onClick={handleSettleAndEmail}
-                     disabled={isSettling}
-                     className="flex items-center gap-1 text-[10px] text-emerald-300 hover:text-white font-bold uppercase tracking-widest bg-emerald-500/20 hover:bg-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-all shadow-sm"
-                     title="Archive month, send breakdown email to Sam & Lauren, and clear for next month"
-                   >
-                     <Mail size={12} />
-                     {isSettling ? 'Settling...' : 'Settle & Email'}
-                   </button>
-                   <button onClick={handleExportMonth} className="text-[10px] text-blue-400 hover:text-white font-bold uppercase tracking-widest bg-blue-400/10 hover:bg-blue-500/50 px-3 py-1.5 rounded-lg transition-colors">
-                     Export
-                   </button>
-                   <button onClick={handleClearMonth} className="text-[10px] text-red-400 hover:text-white font-bold uppercase tracking-widest bg-red-400/10 hover:bg-red-500/50 px-3 py-1.5 rounded-lg transition-colors">
-                     Clear
-                   </button>
-                 </>
-               )}
-             </div>
-          </div>
-
-          {!isReadOnly && (
-            <div className="bg-white/5 rounded-2xl p-6 mb-6">
-               <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4">Add Grocery Shop</h3>
-               <form onSubmit={handleAdd} className="flex flex-col gap-3">
-                 <div className="flex flex-col sm:flex-row gap-2">
-                   <input placeholder="Vendor (e.g. Tesco)" value={vendorName} onChange={e=>setVendorName(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400 min-w-[100px]" />
-                   <input placeholder="Total £" type="number" step="0.01" value={totalAmount} onChange={e=>setTotalAmount(e.target.value)} className="w-full sm:w-24 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400" />
-                 </div>
-                 <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-                   <span className="text-xs text-slate-400 font-bold whitespace-nowrap hidden sm:block">Who Paid?</span>
-                   <select value={payerName} onChange={e=>setPayerName(e.target.value)} className="w-full sm:w-28 bg-white/10 text-white text-xs px-2 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400">
-                     <option value="Sam">Sam</option>
-                     <option value="Lauren">Lauren</option>
-                   </select>
-                   <input placeholder={`Amount ${payerName} Covers £`} type="number" step="0.01" value={payerCoveredAmount} onChange={e=>setPayerCoveredAmount(e.target.value)} className="flex-1 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400 min-w-[100px]" />
-                 </div>
-                 <button type="submit" className="bg-blue-500 text-white py-2 rounded-lg hover:bg-blue-600 text-xs font-bold uppercase tracking-widest mt-1">Add Shop</button>
-               </form>
+        {/* Header: Title and Controls */}
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-2">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 flex-shrink-0">
+              <Calculator size={22} />
             </div>
-          )}
-
-          <div className="space-y-3">
-             {shops.length === 0 && <p className="text-slate-500 text-xs text-center py-4">No shops added this month.</p>}
-             {shops.map(shop => (
-               <div key={shop.id} className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/5 p-3 rounded-xl border border-white/5 group gap-3 sm:gap-0">
-                 <div>
-                   <p className="text-sm font-bold text-white">{shop.vendorName}</p>
-                   <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{new Date(shop.date).toLocaleDateString('en-GB')}</p>
-                 </div>
-                 <div className="flex flex-wrap items-center gap-3 sm:gap-6 w-full sm:w-auto">
-                   <div className="text-left sm:text-right hidden sm:block">
-                     <p className="text-[9px] text-slate-500 font-bold uppercase">Total</p>
-                     <p className="font-mono text-xs">{formatCurrency(shop.totalAmount)}</p>
-                   </div>
-                   <div className="text-left sm:text-right sm:border-l border-white/10 sm:pl-4 flex-1 sm:flex-none">
-                     <p className="text-[9px] text-blue-400 font-bold uppercase">{shop.payerName} Paid</p>
-                     <p className="font-mono text-xs">{formatCurrency(shop.totalAmount)}</p>
-                   </div>
-                   <div className="text-left sm:text-right border-l border-white/10 pl-3 sm:pl-4 flex-1 sm:flex-none">
-                     <p className="text-[9px] text-slate-400 font-bold uppercase">{shop.payerName === 'Sam' ? 'Lauren Owes' : 'Sam Owes'}</p>
-                     <p className="font-mono text-xs font-bold text-emerald-400">{formatCurrency(shop.totalAmount - shop.payerCoveredAmount)}</p>
-                   </div>
-                   {!isReadOnly && (
-                     <button onClick={() => api.deleteSharedAmexShop(shop.id).then(fetchData)} className="text-slate-500 hover:text-red-400 sm:opacity-0 group-hover:opacity-100 transition-opacity p-2 sm:p-0">
-                       <Trash2 size={16} />
-                     </button>
-                   )}
-                 </div>
-               </div>
-             ))}
+            <div>
+              <h2 className="text-xl font-black tracking-tight">Amex Statement Calculator</h2>
+              <p className="text-slate-400 text-xs">Shared Food Shops & Monthly Settlement Breakdown</p>
+            </div>
           </div>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            <select 
+              value={selectedExportId} 
+              onChange={e => setSelectedExportId(e.target.value)}
+              className="bg-white/10 text-white text-xs px-3 py-2 rounded-lg outline-none border border-white/10 focus:border-blue-400"
+            >
+              <option value="">Current Month</option>
+              {exportsList.map(exp => (
+                <option key={exp.id} value={exp.id}>{exp.name}</option>
+              ))}
+            </select>
 
+            {!isReadOnly && (
+              <>
+                <button
+                  onClick={handleSettleAndEmail}
+                  disabled={isSettling}
+                  className="flex items-center gap-1.5 text-[10px] text-emerald-300 hover:text-white font-bold uppercase tracking-widest bg-emerald-500/20 hover:bg-emerald-600 px-3 py-2 rounded-lg border border-emerald-500/30 transition-all shadow-sm"
+                  title="Archive month, send breakdown email to Sam & Lauren, and clear for next month"
+                >
+                  <Mail size={12} />
+                  {isSettling ? 'Settling...' : 'Settle & Email'}
+                </button>
+                <button 
+                  onClick={handleExportMonth} 
+                  className="text-[10px] text-blue-300 hover:text-white font-bold uppercase tracking-widest bg-blue-500/10 hover:bg-blue-500/30 px-3 py-2 rounded-lg border border-blue-500/20 transition-colors"
+                >
+                  Export
+                </button>
+                <button 
+                  onClick={handleClearMonth} 
+                  className="text-[10px] text-red-300 hover:text-white font-bold uppercase tracking-widest bg-red-500/10 hover:bg-red-500/30 px-3 py-2 rounded-lg border border-red-500/20 transition-colors"
+                >
+                  Clear
+                </button>
+              </>
+            )}
+          </div>
         </div>
 
-        {/* Right Side: Calculation Summary */}
-        <div className="w-full lg:w-80 flex flex-col justify-center gap-8">
-           <div className="bg-white/10 rounded-2xl p-6 border border-white/20">
-             <h3 className="text-[10px] font-black uppercase tracking-widest text-slate-400 mb-3">Lauren's Statement Amount</h3>
-             <div className="relative">
-               <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white font-bold text-xl">£</span>
-               <input 
-                 type="number"
-                 step="0.01"
-                 disabled={isReadOnly}
-                 value={partnerStatement || ''}
-                 onChange={(e) => {
-                   setLivePartnerStatement(Number(e.target.value));
-                 }}
-                 onBlur={(e) => {
-                   api.updateCalculatorStatement(Number(e.target.value) || 0);
-                 }}
-                 className="w-full bg-slate-900/50 text-white font-mono font-bold text-3xl px-4 py-4 pl-10 rounded-xl border border-white/10 outline-none focus:border-blue-400 disabled:opacity-75 disabled:cursor-not-allowed"
-               />
-             </div>
-           </div>
+        {/* Add Shop Form (Full Width 12-Column Responsive Grid) */}
+        {!isReadOnly && (
+          <div className="bg-white/5 rounded-2xl p-6 border border-white/5 shadow-inner">
+            <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4 flex items-center gap-2">
+              <ShoppingCart size={13} /> Add Shared Grocery Shop
+            </h3>
+            <form onSubmit={handleAdd} className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-12 gap-3 items-end">
+              <div className="lg:col-span-4">
+                <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Vendor</label>
+                <input 
+                  placeholder="e.g. Tesco, Aldi, M&S" 
+                  value={vendorName} 
+                  onChange={e => setVendorName(e.target.value)} 
+                  className="w-full bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2.5 rounded-lg border border-white/10 outline-none focus:border-blue-400" 
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Total (£)</label>
+                <input 
+                  placeholder="0.00" 
+                  type="number" 
+                  step="0.01" 
+                  value={totalAmount} 
+                  onChange={e => setTotalAmount(e.target.value)} 
+                  className="w-full bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2.5 rounded-lg border border-white/10 outline-none focus:border-blue-400 font-mono" 
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Who Paid?</label>
+                <select 
+                  value={payerName} 
+                  onChange={e => setPayerName(e.target.value)} 
+                  className="w-full bg-slate-900 text-white text-xs px-3 py-2.5 rounded-lg border border-white/10 outline-none focus:border-blue-400"
+                >
+                  <option value="Sam">Sam</option>
+                  <option value="Lauren">Lauren</option>
+                </select>
+              </div>
+              <div className="lg:col-span-2">
+                <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{payerName} Covers (£)</label>
+                <input 
+                  placeholder="0.00" 
+                  type="number" 
+                  step="0.01" 
+                  value={payerCoveredAmount} 
+                  onChange={e => setPayerCoveredAmount(e.target.value)} 
+                  className="w-full bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2.5 rounded-lg border border-white/10 outline-none focus:border-blue-400 font-mono" 
+                />
+              </div>
+              <div className="lg:col-span-2">
+                <button 
+                  type="submit" 
+                  className="w-full bg-blue-500 hover:bg-blue-600 text-white py-2.5 rounded-lg text-xs font-bold uppercase tracking-widest transition-colors flex items-center justify-center gap-1.5 shadow-md shadow-blue-500/20"
+                >
+                  <Plus size={14} /> Add Shop
+                </button>
+              </div>
+            </form>
+          </div>
+        )}
 
-           <div>
-             <h3 className="text-[10px] font-black uppercase tracking-widest text-blue-300 mb-4">Settlement Breakdown</h3>
-             <div className="space-y-3">
-               <div className="flex justify-between items-center text-xs">
-                 <span className="text-slate-400">Lauren's Statement</span>
-                 <span className="font-mono text-white">{formatCurrency(partnerStatement)}</span>
-               </div>
-               <div className="flex justify-between items-center text-xs">
-                 <span className="text-slate-400">Lauren Owes for your shops</span>
-                 <span className="font-mono text-emerald-400">+{formatCurrency(partnerOwesForMyShops)}</span>
-               </div>
-               <div className="flex justify-between items-center text-xs border-b border-white/10 pb-3">
-                 <span className="text-slate-400">Sam Owes for Lauren's shops</span>
-                 <span className="font-mono text-red-400">-{formatCurrency(iOweForPartnerShops)}</span>
-               </div>
-               <div className="flex justify-between items-center pt-2">
-                 <span className="text-[10px] font-black uppercase tracking-widest text-white">Final Amount Lauren Owes</span>
-                 <span className="font-mono text-2xl font-black text-blue-400">{formatCurrency(finalAmountPartnerOwes)}</span>
-               </div>
-             </div>
-           </div>
+        {/* Shops List (Shows 3 most recent by default, expandable) */}
+        <div className="space-y-3">
+          {sortedShops.length === 0 && (
+            <div className="bg-white/5 rounded-xl p-8 text-center border border-white/5">
+              <p className="text-slate-400 text-xs font-medium">No shops added for this month.</p>
+              <p className="text-[11px] text-slate-500 mt-1">Use the form above to add shared groceries, or select a previous month from the dropdown.</p>
+            </div>
+          )}
+          {visibleShops.map(shop => (
+            <div 
+              key={shop.id} 
+              className="flex flex-col sm:flex-row sm:items-center justify-between bg-white/5 p-4 rounded-xl border border-white/5 hover:bg-white/[0.07] group gap-3 sm:gap-0 transition-colors"
+            >
+              <div className="flex items-center gap-3">
+                <div className="w-8 h-8 rounded-lg bg-blue-500/10 border border-blue-500/20 flex items-center justify-center text-blue-400 font-bold text-xs flex-shrink-0">
+                  <ShoppingCart size={14} />
+                </div>
+                <div>
+                  <p className="text-sm font-bold text-white tracking-tight">{shop.vendorName}</p>
+                  <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5">{new Date(shop.date).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric' })}</p>
+                </div>
+              </div>
+              <div className="flex flex-wrap items-center gap-3 sm:gap-6 w-full sm:w-auto">
+                <div className="text-left sm:text-right hidden sm:block">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">Total</p>
+                  <p className="font-mono text-xs font-semibold text-white">{formatCurrency(shop.totalAmount)}</p>
+                </div>
+                <div className="text-left sm:text-right sm:border-l border-white/10 sm:pl-4 flex-1 sm:flex-none">
+                  <p className="text-[9px] text-blue-400 font-bold uppercase tracking-wider">{shop.payerName} Paid</p>
+                  <p className="font-mono text-xs font-semibold text-blue-200">{formatCurrency(shop.totalAmount)}</p>
+                </div>
+                <div className="text-left sm:text-right border-l border-white/10 pl-3 sm:pl-4 flex-1 sm:flex-none">
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{shop.payerName === 'Sam' ? 'Lauren Owes' : 'Sam Owes'}</p>
+                  <p className="font-mono text-xs font-bold text-emerald-400">{formatCurrency(shop.totalAmount - shop.payerCoveredAmount)}</p>
+                </div>
+                {!isReadOnly && (
+                  <button 
+                    onClick={() => api.deleteSharedAmexShop(shop.id).then(fetchData)} 
+                    className="text-slate-400 hover:text-red-400 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-white/10"
+                    title="Delete shop"
+                  >
+                    <Trash2 size={15} />
+                  </button>
+                )}
+              </div>
+            </div>
+          ))}
+
+          {sortedShops.length > 3 && (
+            <div className="pt-2 flex justify-center">
+              <button
+                type="button"
+                onClick={() => setShowAllShops(!showAllShops)}
+                className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-blue-300 hover:text-white bg-white/5 hover:bg-white/10 px-4 py-2 rounded-xl border border-white/10 transition-all shadow-sm"
+              >
+                {showAllShops ? (
+                  <>
+                    <ChevronUp size={14} /> Show Less (Showing all {sortedShops.length})
+                  </>
+                ) : (
+                  <>
+                    <ChevronDown size={14} /> Show All ({sortedShops.length} shops)
+                  </>
+                )}
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Bottom Section: Lauren's Statement Amount & Settlement Breakdown */}
+        <div className="mt-8 pt-8 border-t border-white/10 grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
+          
+          {/* Left Card: Lauren's Statement Amount */}
+          <div className="bg-white/5 rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
+            <div>
+              <div className="flex items-center justify-between mb-2">
+                <h3 className="text-xs font-bold uppercase tracking-widest text-slate-300 flex items-center gap-2">
+                  <CreditCard size={15} className="text-indigo-400" />
+                  Lauren's Statement Amount
+                </h3>
+                {tlStatus?.isConnected && (
+                  <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
+                    <CheckCircle2 size={10} /> Auto-Syncs 19th
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-slate-400 mb-4">
+                Total charges on Lauren's card for this statement cycle (20th to 19th). Auto-populated by TrueLayer or editable manually.
+              </p>
+            </div>
+            
+            <div className="relative mt-2">
+              <span className="absolute left-4 top-1/2 -translate-y-1/2 text-white font-bold text-2xl">£</span>
+              <input 
+                type="number"
+                step="0.01"
+                disabled={isReadOnly}
+                value={partnerStatement || ''}
+                onChange={(e) => {
+                  setLivePartnerStatement(Number(e.target.value));
+                }}
+                onBlur={(e) => {
+                  api.updateCalculatorStatement(Number(e.target.value) || 0);
+                }}
+                className="w-full bg-slate-900/60 text-white font-mono font-black text-3xl px-4 py-3.5 pl-10 rounded-xl border border-white/10 outline-none focus:border-blue-400 disabled:opacity-75 disabled:cursor-not-allowed"
+                placeholder="0.00"
+              />
+            </div>
+          </div>
+
+          {/* Right Card: Settlement Breakdown */}
+          <div className="bg-white/5 rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
+            <div>
+              <h3 className="text-xs font-bold uppercase tracking-widest text-blue-300 mb-3 flex items-center gap-2">
+                <Calculator size={15} /> Settlement Breakdown
+              </h3>
+              <div className="space-y-2.5">
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">Lauren's Statement Amount</span>
+                  <span className="font-mono text-white font-semibold">{formatCurrency(partnerStatement)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">Lauren owes for your shops</span>
+                  <span className="font-mono text-emerald-400 font-semibold">+{formatCurrency(partnerOwesForMyShops)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs pb-3 border-b border-white/10">
+                  <span className="text-slate-400">Sam owes for Lauren's shops</span>
+                  <span className="font-mono text-rose-400 font-semibold">-{formatCurrency(iOweForPartnerShops)}</span>
+                </div>
+              </div>
+            </div>
+
+            <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex items-center justify-between">
+              <div>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Final Amount Lauren Owes</p>
+                <p className="text-[10px] text-slate-400 mt-0.5">Total settlement due for this month</p>
+              </div>
+              <span className="font-mono text-2xl sm:text-3xl font-black text-blue-400">{formatCurrency(finalAmountPartnerOwes)}</span>
+            </div>
+          </div>
+
         </div>
 
       </div>
