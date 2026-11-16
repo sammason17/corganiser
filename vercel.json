@@ -6,10 +6,20 @@
     { "source": "/api/(.*)", "destination": "/api" },
     { "source": "/(.*)", "destination": "/index.html" }
   ],
+  "crons": [
+    {
+      "path": "/api/cron/amex-precheck",
+      "schedule": "0 9 18 * *"
+    },
+    {
+      "path": "/api/cron/amex-settlement",
+      "schedule": "0 9,15 19-24 * *"
+    }
+  ],
   "functions": {
     "api/index.js": {
       "memory": 256,
-      "maxDuration": 10
+      "maxDuration": 15
     }
   }
 }

@@ -154,4 +154,38 @@ export async function createCalculatorExport(payload) {
   const { data } = await api.post('/budget/calculator/exports', payload)
   return data
 }
+export async function getNextCalculatorExportName() {
+  const { data } = await api.get('/budget/calculator/next-export-name')
+  return data.nextName
+}
+export async function settleCalculatorMonth(payload) {
+  const { data } = await api.post('/budget/calculator/settle', payload)
+  return data
+}
+
+// ── TrueLayer Open Banking ──────────────────────────────────────────────────
+export async function getTrueLayerStatus() {
+  const { data } = await api.get('/truelayer/status')
+  return data
+}
+export async function getTrueLayerAuthUrl() {
+  const { data } = await api.get('/truelayer/auth-url')
+  return data
+}
+export async function getTrueLayerCards() {
+  const { data } = await api.get('/truelayer/cards')
+  return data
+}
+export async function updateTrueLayerConfig(payload) {
+  const { data } = await api.post('/truelayer/config', payload)
+  return data
+}
+export async function syncTrueLayerNow() {
+  const { data } = await api.post('/truelayer/sync-now')
+  return data
+}
+export async function disconnectTrueLayer() {
+  const { data } = await api.post('/truelayer/disconnect')
+  return data
+}
 

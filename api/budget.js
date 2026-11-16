@@ -1,6 +1,7 @@
 import express from 'express'
 import prisma from '../lib/prisma.js'
 import { requireAuth } from '../lib/auth.js'
+import { getUniqueExportName, executeSettlementExportAndClear } from '../lib/settlementAutomation.js'
 
 const router = express.Router()
 router.use(requireAuth)
@@ -486,6 +487,15 @@ router.put('/calculator/statement', async (req, res) => {
   }
 })
 
+router.get('/calculator/next-export-name', async (req, res) => {
+  try {
+    const nextName = await getUniqueExportName()
+    res.json({ nextName })
+  } catch (err) {
+    res.status(500).json({ error: 'Server error' })
+  }
+})
+
 router.get('/calculator/exports', async (req, res) => {
   try {
     const exports = await prisma.sharedAmexExport.findMany({ orderBy: { createdAt: 'desc' } })
@@ -497,11 +507,16 @@ router.get('/calculator/exports', async (req, res) => {
 
 router.post('/calculator/exports', async (req, res) => {
   try {
-    const { name } = req.body
-    if (!name) return res.status(400).json({ error: 'Name is required' })
-
-    const existing = await prisma.sharedAmexExport.findUnique({ where: { name } })
-    if (existing) return res.status(409).json({ error: 'An export with this name already exists' })
+    let { name } = req.body
+    if (!name) {
+      name = await getUniqueExportName()
+    } else {
+      const existing = await prisma.sharedAmexExport.findUnique({ where: { name } })
+      if (existing) {
+        // Automatically find next available increment if duplicate
+        name = await getUniqueExportName()
+      }
+    }
 
     const shops = await prisma.sharedAmexFoodShop.findMany({ orderBy: { date: 'asc' } })
     const state = await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
@@ -518,6 +533,27 @@ router.post('/calculator/exports', async (req, res) => {
   } catch (err) {
     console.error(err)
     res.status(500).json({ error: 'Server error' })
+  }
+})
+
+router.post('/calculator/settle', async (req, res) => {
+  try {
+    const { partnerStatementAmount, name } = req.body
+    const state = await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
+    const finalPartnerStatement = partnerStatementAmount !== undefined 
+      ? Number(partnerStatementAmount) 
+      : (state?.partnerStatementAmount || 0)
+
+    const result = await executeSettlementExportAndClear({
+      partnerStatementAmount: finalPartnerStatement,
+      autoExported: false,
+      customName: name || null,
+    })
+
+    res.json({ success: true, ...result })
+  } catch (err) {
+    console.error('[Manual Settle Error]', err)
+    res.status(500).json({ error: err.message || 'Settlement failed' })
   }
 })
 

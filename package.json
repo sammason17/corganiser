@@ -21,7 +21,8 @@
     "express": "^4.19.2",
     "express-rate-limit": "^8.3.2",
     "jsonwebtoken": "^9.0.2",
-    "prisma": "^5.13.0"
+    "prisma": "^5.13.0",
+    "resend": "^6.38.1"
   },
   "devDependencies": {
     "concurrently": "^8.2.2",

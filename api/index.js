@@ -8,6 +8,8 @@ import { PrismaClient } from '@prisma/client'
 import workoutRouter from './workout.js'
 import debtRouter from './debt.js'
 import budgetRouter from './budget.js'
+import truelayerRouter from './truelayer.js'
+import cronRouter from './cron.js'
 
 // ── Prisma ────────────────────────────────────────────────────────────────────
 const prisma = global.prisma ?? new PrismaClient()
@@ -74,6 +76,8 @@ app.use(express.json())
 app.use('/api/workout', workoutRouter)
 app.use('/api/debt', debtRouter)
 app.use('/api/budget', budgetRouter)
+app.use('/api/truelayer', truelayerRouter)
+app.use('/api/cron', cronRouter)
 
 // ── Rate limiting ─────────────────────────────────────────────────────────────
 // Limits brute-force attempts on public auth endpoints.

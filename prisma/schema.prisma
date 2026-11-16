@@ -438,7 +438,36 @@ model SharedAmexExport {
   name                   String   @unique
   partnerStatementAmount Float    @map("partner_statement_amount")
   shopsData              Json     @map("shops_data")
+  partnerOwesForMyShops  Float?   @map("partner_owes_for_my_shops")
+  iOweForPartnerShops    Float?   @map("i_owe_for_partner_shops")
+  finalAmountPartnerOwes Float?   @map("final_amount_partner_owes")
+  autoExported           Boolean  @default(false) @map("auto_exported")
   createdAt              DateTime @default(now()) @map("created_at")
 
   @@map("shared_amex_exports")
+}
+
+model AmexAutomationConfig {
+  id                         String    @id @default("singleton")
+  accessToken                String?   @map("access_token")
+  refreshToken               String?   @map("refresh_token")
+  tokenExpiresAt             DateTime? @map("token_expires_at")
+  consentExpiresAt           DateTime? @map("consent_expires_at")
+
+  cardAccountId              String?   @map("card_account_id")
+  laurenSupplementaryCardId  String?   @map("lauren_supplementary_card_id")
+
+  lastKnownStatementDate     String?   @map("last_known_statement_date")
+  lastProcessedStatementDate String?   @map("last_processed_statement_date")
+  lastPrecheckSentMonth      String?   @map("last_precheck_sent_month")
+
+  isActive                   Boolean   @default(false) @map("is_active")
+  lastSyncAt                 DateTime? @map("last_sync_at")
+  lastSyncStatus             String?   @map("last_sync_status")
+  lastSyncMessage            String?   @map("last_sync_message")
+
+  createdAt                  DateTime  @default(now()) @map("created_at")
+  updatedAt                  DateTime  @updatedAt @map("updated_at")
+
+  @@map("amex_automation_config")
 }

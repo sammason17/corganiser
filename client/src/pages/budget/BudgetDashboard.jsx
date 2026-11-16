@@ -1,7 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { 
   Wallet, PieChart as PieChartIcon, CreditCard, Plus, Trash2, 
-  PoundSterling, ShoppingCart, Repeat, Landmark, Pencil, GripVertical, Calculator
+  PoundSterling, ShoppingCart, Repeat, Landmark, Pencil, GripVertical, Calculator,
+  Mail, RefreshCw, CheckCircle2, Settings2, ShieldCheck, Unlink, Sparkles
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { motion, AnimatePresence } from 'motion/react';
@@ -867,11 +868,31 @@ function AmexStatementCalculator() {
   const [selectedExportId, setSelectedExportId] = useState('');
   const [loading, setLoading] = useState(true);
 
+  // TrueLayer state
+  const [tlStatus, setTlStatus] = useState(null);
+  const [tlCardsData, setTlCardsData] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
+  const [isSettling, setIsSettling] = useState(false);
+  const [showTlConfig, setShowTlConfig] = useState(false);
+  const [selectedCardId, setSelectedCardId] = useState('');
+  const [selectedLaurenCardId, setSelectedLaurenCardId] = useState('');
+
   // Form State
   const [vendorName, setVendorName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [payerName, setPayerName] = useState('Sam');
   const [payerCoveredAmount, setPayerCoveredAmount] = useState('');
+
+  const fetchTlStatus = async () => {
+    try {
+      const status = await api.getTrueLayerStatus();
+      setTlStatus(status);
+      if (status.cardAccountId) setSelectedCardId(status.cardAccountId);
+      if (status.laurenSupplementaryCardId) setSelectedLaurenCardId(status.laurenSupplementaryCardId);
+    } catch (err) {
+      console.warn('Could not fetch TrueLayer status:', err);
+    }
+  };
 
   const fetchData = async () => {
     try {
@@ -882,6 +903,7 @@ function AmexStatementCalculator() {
       setLiveShops(stateData.shops);
       setLivePartnerStatement(stateData.partnerStatementAmount);
       setExportsList(exportsData);
+      await fetchTlStatus();
     } catch (err) {
       console.error(err);
     } finally {
@@ -891,7 +913,89 @@ function AmexStatementCalculator() {
 
   useEffect(() => {
     fetchData();
+
+    // Check for OAuth redirect return
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('truelayer') === 'connected') {
+      alert('American Express connected successfully via TrueLayer!');
+      window.history.replaceState({}, '', window.location.pathname);
+      fetchTlStatus();
+    } else if (params.get('truelayer') === 'error') {
+      alert(`TrueLayer connection error: ${params.get('msg') || 'Authentication failed'}`);
+      window.history.replaceState({}, '', window.location.pathname);
+    }
   }, []);
+
+  const handleConnectTrueLayer = async () => {
+    try {
+      const { url } = await api.getTrueLayerAuthUrl();
+      window.location.href = url;
+    } catch (err) {
+      alert(err.message || 'Failed to start TrueLayer connection');
+    }
+  };
+
+  const handleOpenTlConfig = async () => {
+    setShowTlConfig(!showTlConfig);
+    if (!showTlConfig) {
+      try {
+        const cardsData = await api.getTrueLayerCards();
+        setTlCardsData(cardsData);
+        if (cardsData.selectedCardId) setSelectedCardId(cardsData.selectedCardId);
+        if (cardsData.laurenSupplementaryCardId) setSelectedLaurenCardId(cardsData.laurenSupplementaryCardId);
+      } catch (err) {
+        console.warn('Could not load card details:', err);
+      }
+    }
+  };
+
+  const handleSaveTlConfig = async () => {
+    try {
+      await api.updateTrueLayerConfig({
+        cardAccountId: selectedCardId,
+        laurenSupplementaryCardId: selectedLaurenCardId,
+      });
+      alert('TrueLayer card configuration saved!');
+      setShowTlConfig(false);
+      fetchTlStatus();
+    } catch (err) {
+      alert(err.message || 'Failed to save configuration');
+    }
+  };
+
+  const handleSyncNow = async () => {
+    setIsSyncing(true);
+    try {
+      const res = await api.syncTrueLayerNow();
+      if (res.status === 'COMPLETED') {
+        alert(`Settlement complete! Month archived as "${res.exportResult?.export?.name || 'export'}" and statement emails sent.`);
+        fetchData();
+      } else if (res.status === 'ALREADY_PROCESSED') {
+        alert(`Statement for ${res.lastStatementDate} has already been settled and exported.`);
+      } else if (res.status === 'AWAITING_NEW_STATEMENT') {
+        alert(`Latest statement date in TrueLayer (${res.lastStatementDate}) is from a prior cycle. Awaiting Amex to cut current statement.`);
+      } else {
+        alert(`Status: ${res.status} - ${res.message || 'Checked'}`);
+      }
+      fetchTlStatus();
+    } catch (err) {
+      alert(err.message || 'Sync check failed');
+    } finally {
+      setIsSyncing(false);
+    }
+  };
+
+  const handleDisconnect = async () => {
+    if (!window.confirm('Disconnect TrueLayer from American Express?')) return;
+    try {
+      await api.disconnectTrueLayer();
+      alert('TrueLayer disconnected.');
+      setShowTlConfig(false);
+      fetchTlStatus();
+    } catch (err) {
+      alert(err.message || 'Failed to disconnect');
+    }
+  };
 
   const handleAdd = async (e) => {
     e.preventDefault();
@@ -916,7 +1020,7 @@ function AmexStatementCalculator() {
   };
 
   const handleExportMonth = async () => {
-    const defaultName = new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).replace(' ', '-');
+    const defaultName = await api.getNextCalculatorExportName().catch(() => new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).replace(' ', '-'));
     const name = window.prompt('Name this export:', defaultName);
     if (!name) return;
     try {
@@ -925,6 +1029,23 @@ function AmexStatementCalculator() {
       fetchData();
     } catch (err) {
       alert(err.response?.data?.error || err.message || 'Failed to export');
+    }
+  };
+
+  const handleSettleAndEmail = async () => {
+    const nextName = await api.getNextCalculatorExportName().catch(() => new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).replace(' ', '-'));
+    const confirmMsg = `Are you sure you want to finalize this month?\n\nThis will:\n1. Archive to "${nextName}"\n2. Send statement summary emails to Sam & Lauren\n3. Clear shops and reset calculator for next month`;
+    if (!window.confirm(confirmMsg)) return;
+
+    setIsSettling(true);
+    try {
+      const res = await api.settleCalculatorMonth({ partnerStatementAmount: livePartnerStatement });
+      alert(`Month settled successfully!\nArchived to: ${res.export?.name}\nEmails sent to: ${res.recipients?.join(', ')}`);
+      fetchData();
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Failed to settle month');
+    } finally {
+      setIsSettling(false);
     }
   };
 
@@ -953,6 +1074,132 @@ function AmexStatementCalculator() {
     <div className="bg-slate-900 rounded-[2rem] p-8 text-white shadow-xl relative overflow-hidden mt-8">
       <div className="absolute bottom-0 left-0 w-96 h-96 bg-blue-500/10 rounded-full blur-3xl translate-y-1/2 -translate-x-1/4 pointer-events-none"></div>
       
+      {/* Top Banner: TrueLayer Sync Status */}
+      <div className="relative z-10 flex flex-wrap items-center justify-between pb-6 mb-6 border-b border-white/10 gap-4">
+        <div className="flex items-center gap-3">
+          <div className={`w-2.5 h-2.5 rounded-full ${tlStatus?.isConnected ? 'bg-emerald-400 animate-pulse' : 'bg-slate-500'}`} />
+          <div>
+            <div className="flex items-center gap-2">
+              <span className="text-xs font-bold uppercase tracking-wider text-white">
+                {tlStatus?.isConnected ? 'Amex Live Sync (TrueLayer)' : 'Amex Automation'}
+              </span>
+              {tlStatus?.consentDaysRemaining !== null && (
+                <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/30">
+                  {tlStatus.consentDaysRemaining}d consent
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400">
+              {tlStatus?.isConnected
+                ? `Auto-polls on 19th • Last settled: ${tlStatus.lastProcessedStatementDate || 'None this cycle'}`
+                : 'Connect American Express to automatically populate Lauren\'s statement and settle monthly'}
+            </p>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2">
+          {tlStatus?.isConnected ? (
+            <>
+              <button
+                onClick={handleSyncNow}
+                disabled={isSyncing}
+                className="flex items-center gap-1.5 text-[10px] text-blue-300 hover:text-white font-bold uppercase tracking-widest bg-blue-500/10 hover:bg-blue-500/30 px-3 py-1.5 rounded-lg border border-blue-500/20 transition-all disabled:opacity-50"
+              >
+                <RefreshCw size={12} className={isSyncing ? 'animate-spin' : ''} />
+                {isSyncing ? 'Checking...' : 'Check / Sync Now'}
+              </button>
+              <button
+                onClick={handleOpenTlConfig}
+                className="text-slate-400 hover:text-white p-1.5 rounded-lg hover:bg-white/10 transition-colors"
+                title="TrueLayer Card Settings"
+              >
+                <Settings2 size={16} />
+              </button>
+            </>
+          ) : (
+            <button
+              onClick={handleConnectTrueLayer}
+              className="flex items-center gap-1.5 text-[10px] text-white font-bold uppercase tracking-widest bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-3 py-1.5 rounded-lg shadow-md transition-all"
+            >
+              <CreditCard size={12} />
+              Connect Amex
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* TrueLayer Card Config Drawer */}
+      {showTlConfig && (
+        <div className="relative z-10 bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
+          <div className="flex items-center justify-between mb-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-blue-300 flex items-center gap-1.5">
+              <ShieldCheck size={14} /> TrueLayer Card Configuration
+            </h4>
+            <button
+              onClick={handleDisconnect}
+              className="text-[10px] text-rose-400 hover:text-rose-300 font-bold uppercase tracking-wider flex items-center gap-1"
+            >
+              <Unlink size={12} /> Disconnect
+            </button>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 text-xs">
+            <div>
+              <label className="block text-slate-400 mb-1 text-[11px] font-bold uppercase">Card Account</label>
+              <select
+                value={selectedCardId}
+                onChange={e => setSelectedCardId(e.target.value)}
+                className="w-full bg-slate-900/80 text-white text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400"
+              >
+                <option value="">Select Card</option>
+                {tlCardsData?.cards?.map(c => (
+                  <option key={c.account_id} value={c.account_id}>
+                    {c.display_name || c.name_on_card} (•••• {c.partial_card_number})
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div>
+              <label className="block text-slate-400 mb-1 text-[11px] font-bold uppercase">Lauren's Supplementary Card ID</label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. card_id"
+                  value={selectedLaurenCardId}
+                  onChange={e => setSelectedLaurenCardId(e.target.value)}
+                  className="flex-1 bg-slate-900/80 text-white text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-blue-400"
+                />
+                {tlCardsData?.detectedSupplementaryCardIds?.length > 0 && (
+                  <select
+                    onChange={e => setSelectedLaurenCardId(e.target.value)}
+                    className="bg-slate-900/80 text-white text-xs px-2 py-2 rounded-lg border border-white/10 outline-none"
+                    value=""
+                  >
+                    <option value="" disabled>Detected IDs</option>
+                    {tlCardsData.detectedSupplementaryCardIds.map(id => (
+                      <option key={id} value={id}>{id}</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            </div>
+          </div>
+          <div className="flex justify-end gap-2 mt-4">
+            <button
+              onClick={() => setShowTlConfig(false)}
+              className="text-[10px] text-slate-400 hover:text-white px-3 py-1.5 rounded"
+            >
+              Cancel
+            </button>
+            <button
+              onClick={handleSaveTlConfig}
+              className="text-[10px] bg-blue-500 hover:bg-blue-600 text-white font-bold uppercase tracking-wider px-4 py-1.5 rounded-lg"
+            >
+              Save Configuration
+            </button>
+          </div>
+        </div>
+      )}
+
       <div className="relative z-10 flex flex-col lg:flex-row gap-10">
         
         {/* Left Side: Shops List and Add Form */}
@@ -977,11 +1224,20 @@ function AmexStatementCalculator() {
 
                {!isReadOnly && (
                  <>
-                   <button onClick={handleExportMonth} className="text-[10px] text-blue-400 hover:text-white font-bold uppercase tracking-widest bg-blue-400/10 hover:bg-blue-500/50 px-3 py-1.5 rounded transition-colors">
-                     Export Month
+                   <button
+                     onClick={handleSettleAndEmail}
+                     disabled={isSettling}
+                     className="flex items-center gap-1 text-[10px] text-emerald-300 hover:text-white font-bold uppercase tracking-widest bg-emerald-500/20 hover:bg-emerald-600 px-3 py-1.5 rounded-lg border border-emerald-500/30 transition-all shadow-sm"
+                     title="Archive month, send breakdown email to Sam & Lauren, and clear for next month"
+                   >
+                     <Mail size={12} />
+                     {isSettling ? 'Settling...' : 'Settle & Email'}
                    </button>
-                   <button onClick={handleClearMonth} className="text-[10px] text-red-400 hover:text-white font-bold uppercase tracking-widest bg-red-400/10 hover:bg-red-500/50 px-3 py-1.5 rounded transition-colors">
-                     Clear Month
+                   <button onClick={handleExportMonth} className="text-[10px] text-blue-400 hover:text-white font-bold uppercase tracking-widest bg-blue-400/10 hover:bg-blue-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                     Export
+                   </button>
+                   <button onClick={handleClearMonth} className="text-[10px] text-red-400 hover:text-white font-bold uppercase tracking-widest bg-red-400/10 hover:bg-red-500/50 px-3 py-1.5 rounded-lg transition-colors">
+                     Clear
                    </button>
                  </>
                )}
