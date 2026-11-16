@@ -13,7 +13,7 @@
     },
     {
       "path": "/api/cron/amex-settlement",
-      "schedule": "0 9,15 19-24 * *"
+      "schedule": "0 9 19-24 * *"
     }
   ],
   "functions": {
