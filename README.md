@@ -54,6 +54,15 @@ A personal life organiser built with React, Node/Express, and PostgreSQL (Neon).
   - **Expected statement** = full recurring payments + full grocery totals + fixed Amex expenses
   - **Financial breakdown** = cleanly isolates your fixed commitments from your flexible day-to-day spend
   - Overspend warning banner strictly monitors your day-to-day spend (grocery portions + non-amex) against your Monthly Allowance limit
+- **Shared Amex Statement Calculator & Automation**:
+  - Track shared food/grocery shops between Sam and Lauren with custom covered amounts.
+  - **Open Banking Live Sync (TrueLayer)**: Automatically monitors American Express for statement close dates, filters secondary cardholder transactions, and auto-populates Lauren's statement amount with zero manual math.
+  - **Auto-Export & Deduplication**: Archives monthly settlements under default `[Month]-[Year]` format (e.g. `November-2026`) and automatically increments duplicate exports (`November-2026-1`, etc.).
+  - **Auto-Reset**: Clears shops and resets the calculator state cleanly for the fresh month once settled.
+  - **Automated Email Dispatch (Resend)**:
+    - Pre-check reminder email sent to Sam on the 18th before the Amex statement cycle closes on the 19th.
+    - Beautiful HTML statement summary email sent to both Sam and Lauren with itemized shop splits and the final amount owed.
+  - **Vercel Cron Integration**: Runs automated pre-check and statement polling jobs securely in production.
 
 ## Local Development
 
@@ -82,6 +91,14 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 | `JWT_SECRET` | Long random secret for signing tokens |
 | `JWT_EXPIRES_IN` | Token expiry e.g. `7d` |
 | `REGISTRATION_CODE` | Invite code required to register |
+| `RESEND_API_KEY` | Resend API key for automated emails |
+| `RESEND_FROM_EMAIL` | Sender address e.g. `Corganiser <sam@goardr.com>` |
+| `TRUELAYER_CLIENT_ID` | TrueLayer Data API client ID |
+| `TRUELAYER_CLIENT_SECRET` | TrueLayer Data API client secret |
+| `TRUELAYER_ENV` | TrueLayer environment: `live` or `sandbox` |
+| `TRUELAYER_REDIRECT_URI` | (Optional) Explicit OAuth redirect URI |
+| `CRON_SECRET` | Secret token to authorize Vercel Cron jobs |
+| `APP_URL` | Frontend URL for OAuth redirects (e.g. `https://your-domain.vercel.app` or `http://localhost:5173`) |
 
 ## Deploying to Vercel
 
@@ -146,5 +163,26 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 | POST/PUT/DELETE | `/api/budget/amex/recurring/:id?` | Manage recurring Amex payments |
 | POST/PUT/DELETE | `/api/budget/amex/grocery/:id?` | Manage grocery shop entries |
 | POST/PUT/DELETE | `/api/budget/non-amex/:id?` | Manage non-Amex expenses |
+| GET/POST/DELETE | `/api/budget/calculator/shops/:id?` | Manage shared food shops |
+| GET/PUT | `/api/budget/calculator/statement` | Read / update Lauren's statement amount |
+| GET/POST | `/api/budget/calculator/exports` | View and create duplicate-safe exports |
+| POST | `/api/budget/calculator/settle` | Settle month, dispatch emails, and reset |
 
-All endpoints except register, login, and the calendar feed require an `Authorization: Bearer <token>` header.
+### TrueLayer Open Banking
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/truelayer/status` | Current sync state and consent remaining |
+| GET | `/api/truelayer/auth-url` | Generate OAuth authorization URL |
+| GET | `/api/truelayer/callback` | OAuth callback to exchange authorization code |
+| GET | `/api/truelayer/cards` | List cards and detected supplementary card IDs |
+| POST | `/api/truelayer/config` | Update card account & Lauren's card ID |
+| POST | `/api/truelayer/sync-now` | On-demand statement check & settlement |
+| POST | `/api/truelayer/disconnect` | Disconnect TrueLayer and clear tokens |
+
+### Scheduled Crons
+| Method | Endpoint | Description |
+|---|---|---|
+| GET | `/api/cron/amex-precheck` | 18th pre-statement check reminder (Bearer CRON_SECRET) |
+| GET | `/api/cron/amex-settlement` | Statement polling & settlement runner (Bearer CRON_SECRET) |
+
+All endpoints except register, login, the calendar feed, and OAuth callback require an `Authorization: Bearer <token>` header.

@@ -74,7 +74,17 @@ git push -u origin main
    - `DATABASE_URL` — your Neon connection string
    - `JWT_SECRET` — your JWT secret
    - `REGISTRATION_CODE` — your invite code
-4. Deploy!
+   - `RESEND_API_KEY` — your Resend API key
+   - `RESEND_FROM_EMAIL` — sender address e.g. `Corganiser <sam@goardr.com>`
+   - `TRUELAYER_CLIENT_ID` — your TrueLayer client ID
+   - `TRUELAYER_CLIENT_SECRET` — your TrueLayer client secret
+   - `TRUELAYER_ENV` — `live` or `sandbox`
+   - `TRUELAYER_REDIRECT_URI` — (optional) explicit redirect URI e.g. `https://your-domain.vercel.app/api/truelayer/callback`
+   - `CRON_SECRET` — secret string for securing Vercel Cron requests
+   - `APP_URL` — your production frontend URL (e.g. `https://your-domain.vercel.app`)
+4. In TrueLayer Console, add your Redirect URI:
+   - `https://your-domain.vercel.app/api/truelayer/callback`
+5. Deploy!
 
 ### 3. Run migrations on production
 

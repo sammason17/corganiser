@@ -13,14 +13,20 @@ import { checkAndRunStatementSettlement } from '../../lib/settlementAutomation.j
 const router = express.Router()
 
 function getRedirectUri(req) {
-  // If behind proxy (e.g. Vercel), use x-forwarded-proto and x-forwarded-host
+  if (process.env.TRUELAYER_REDIRECT_URI) {
+    return process.env.TRUELAYER_REDIRECT_URI
+  }
+  if (process.env.APP_URL && process.env.APP_URL.startsWith('http')) {
+    return `${process.env.APP_URL.replace(/\/$/, '')}/api/truelayer/callback`
+  }
+  // Fallback to request host
   const proto = req.headers['x-forwarded-proto'] || req.protocol || 'http'
   const host = req.headers['x-forwarded-host'] || req.get('host')
   return `${proto}://${host}/api/truelayer/callback`
 }
 
 function getAppRedirectUrl(path = '/budget') {
-  const baseUrl = process.env.APP_URL || ''
+  const baseUrl = (process.env.APP_URL || '').replace(/\/$/, '')
   return `${baseUrl}${path}`
 }
 
