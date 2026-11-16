@@ -255,7 +255,8 @@ router.post('/config', async (req, res) => {
  */
 router.post('/sync-now', async (req, res) => {
   try {
-    const result = await checkAndRunStatementSettlement()
+    const force = Boolean(req.body?.force || req.query?.force === 'true')
+    const result = await checkAndRunStatementSettlement({ force })
     res.json(result)
   } catch (err) {
     console.error(err)

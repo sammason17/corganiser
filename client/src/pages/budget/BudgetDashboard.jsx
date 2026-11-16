@@ -973,7 +973,7 @@ function AmexStatementCalculator() {
       } else if (res.status === 'ALREADY_PROCESSED') {
         alert(`Statement for ${res.lastStatementDate} has already been settled and exported.`);
       } else if (res.status === 'AWAITING_NEW_STATEMENT') {
-        alert(`Latest statement date in TrueLayer (${res.lastStatementDate}) is from a prior cycle. Awaiting Amex to cut current statement.`);
+        alert(res.message || `Current cycle has not closed yet. Awaiting Amex statement closing date.`);
       } else {
         alert(`Status: ${res.status} - ${res.message || 'Checked'}`);
       }
