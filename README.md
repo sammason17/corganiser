@@ -56,13 +56,20 @@ A personal life organiser built with React, Node/Express, and PostgreSQL (Neon).
   - Overspend warning banner strictly monitors your day-to-day spend (grocery portions + non-amex) against your Monthly Allowance limit
 - **Shared Amex Statement Calculator & Automation**:
   - Track shared food/grocery shops between Sam and Lauren with custom covered amounts.
-  - **Open Banking Live Sync (TrueLayer)**: Automatically monitors American Express for statement close dates, filters secondary cardholder transactions, and auto-populates Lauren's statement amount with zero manual math.
+  - **Open Banking Live Sync (TrueLayer)**: Directly connects Lauren's supplementary American Express card (`LAUREN MASON •••• 2019`), isolates her charges for each billing cycle (20th–19th), and auto-populates her statement spend with zero manual math.
+  - **Settlement Timing & 24th Cron Schedule**:
+    - Statements close on the **19th** of each month (covering transactions from the 20th of the previous month to the 19th of the current month).
+    - The automated settlement cron runs on the **24th at 09:00 UTC** (`0 9 24 * *`) — giving a 5-day buffer for all weekend purchases, pending authorizations, and delayed merchant charges (e.g. Amazon dispatch-based billing) to fully clear before month-end payday.
   - **Auto-Export & Deduplication**: Archives monthly settlements under default `[Month]-[Year]` format (e.g. `November-2026`) and automatically increments duplicate exports (`November-2026-1`, etc.).
   - **Auto-Reset**: Clears shops and resets the calculator state cleanly for the fresh month once settled.
   - **Automated Email Dispatch (Resend)**:
     - Pre-check reminder email sent to Sam on the 18th before the Amex statement cycle closes on the 19th.
-    - Beautiful HTML statement summary email sent to both Sam and Lauren with itemized shop splits and the final amount owed.
-  - **Vercel Cron Integration**: Runs automated pre-check and statement polling jobs securely in production.
+    - Monthly settlement summary email sent to both Sam and Lauren with itemized shop splits and the final amount owed.
+  - **True Manual Override**:
+    - When viewing any previously exported month, click **Manual Override** to amend Lauren's statement spend if an outlier or merchant discrepancy occurs.
+    - Live recalculation preview keeps all recorded shared grocery splits intact and updates the final amount owed.
+    - Updates the archive record (`isOverridden: true`), displays an `• [Amended]` badge in the UI, and immediately dispatches an amended statement email (`[AMENDED] Amex Settlement Summary — [Month-Year]`) to both Sam and Lauren with an amber manual override notice.
+  - **Vercel Cron Integration**: Runs automated pre-check (18th) and settlement (24th) crons securely in production via `CRON_SECRET`.
 
 ## Local Development
 
@@ -166,6 +173,7 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 | GET/POST/DELETE | `/api/budget/calculator/shops/:id?` | Manage shared food shops |
 | GET/PUT | `/api/budget/calculator/statement` | Read / update Lauren's statement amount |
 | GET/POST | `/api/budget/calculator/exports` | View and create duplicate-safe exports |
+| POST | `/api/budget/calculator/exports/:id/override` | Manually override exported month & re-send amended email |
 | POST | `/api/budget/calculator/settle` | Settle month, dispatch emails, and reset |
 
 ### TrueLayer Open Banking
@@ -174,8 +182,8 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 | GET | `/api/truelayer/status` | Current sync state and consent remaining |
 | GET | `/api/truelayer/auth-url` | Generate OAuth authorization URL |
 | GET | `/api/truelayer/callback` | OAuth callback to exchange authorization code |
-| GET | `/api/truelayer/cards` | List cards and detected supplementary card IDs |
-| POST | `/api/truelayer/config` | Update card account & Lauren's card ID |
+| GET | `/api/truelayer/cards` | List cards connected under account |
+| POST | `/api/truelayer/config` | Update card account ID |
 | POST | `/api/truelayer/sync-now` | On-demand statement check & settlement |
 | POST | `/api/truelayer/disconnect` | Disconnect TrueLayer and clear tokens |
 
@@ -183,6 +191,6 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 | Method | Endpoint | Description |
 |---|---|---|
 | GET | `/api/cron/amex-precheck` | 18th pre-statement check reminder (Bearer CRON_SECRET) |
-| GET | `/api/cron/amex-settlement` | Statement polling & settlement runner (Bearer CRON_SECRET) |
+| GET | `/api/cron/amex-settlement` | 24th monthly settlement & email runner (Bearer CRON_SECRET) |
 
 All endpoints except register, login, the calendar feed, and OAuth callback require an `Authorization: Bearer <token>` header.
