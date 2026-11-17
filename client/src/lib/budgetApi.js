@@ -162,6 +162,10 @@ export async function settleCalculatorMonth(payload) {
   const { data } = await api.post('/budget/calculator/settle', payload)
   return data
 }
+export async function overrideCalculatorExport(id, payload) {
+  const { data } = await api.post(`/budget/calculator/exports/${id}/override`, payload)
+  return data
+}
 
 // ── TrueLayer Open Banking ──────────────────────────────────────────────────
 export async function getTrueLayerStatus() {

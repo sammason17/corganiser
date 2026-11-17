@@ -3,7 +3,7 @@ import {
   Wallet, PieChart as PieChartIcon, CreditCard, Plus, Trash2, 
   PoundSterling, ShoppingCart, Repeat, Landmark, Pencil, GripVertical, Calculator,
   Mail, RefreshCw, CheckCircle2, Settings2, ShieldCheck, Unlink, Sparkles,
-  ChevronDown, ChevronUp
+  ChevronDown, ChevronUp, Edit3, AlertTriangle
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { motion, AnimatePresence } from 'motion/react';
@@ -879,6 +879,13 @@ function AmexStatementCalculator() {
   const [showTlConfig, setShowTlConfig] = useState(false);
   const [selectedCardId, setSelectedCardId] = useState('');
 
+  // Override Modal State
+  const [showOverrideModal, setShowOverrideModal] = useState(false);
+  const [overrideAmount, setOverrideAmount] = useState('');
+  const [overrideReason, setOverrideReason] = useState('');
+  const [isOverriding, setIsOverriding] = useState(false);
+  const [overrideAlert, setOverrideAlert] = useState(null);
+
   // Form State
   const [vendorName, setVendorName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
@@ -1048,6 +1055,46 @@ function AmexStatementCalculator() {
     }
   };
 
+  const handleOpenOverrideModal = () => {
+    const currentActive = exportsList.find(e => e.id === selectedExportId);
+    if (!currentActive) return;
+    setOverrideAmount(currentActive.partnerStatementAmount !== undefined ? String(currentActive.partnerStatementAmount) : '0');
+    setOverrideReason('Amended statement total due to statement outlier / timing discrepancy');
+    setShowOverrideModal(true);
+  };
+
+  const handleConfirmOverride = async (e) => {
+    e.preventDefault();
+    const currentActive = exportsList.find(e => e.id === selectedExportId);
+    if (!currentActive) return;
+    const parsed = Number(overrideAmount);
+    if (isNaN(parsed) || parsed < 0) {
+      alert('Please enter a valid statement amount.');
+      return;
+    }
+
+    setIsOverriding(true);
+    try {
+      const res = await api.overrideCalculatorExport(currentActive.id, {
+        partnerStatementAmount: parsed,
+        reason: overrideReason.trim() || undefined,
+      });
+
+      setExportsList(prev => prev.map(exp => exp.id === currentActive.id ? res.export : exp));
+      setShowOverrideModal(false);
+      setOverrideAlert({
+        type: 'success',
+        message: `Manual override applied for ${currentActive.name}! An amended statement email has been sent to Sam and Lauren.`
+      });
+      setTimeout(() => setOverrideAlert(null), 8000);
+    } catch (err) {
+      console.error('Manual override failed:', err);
+      alert(err.response?.data?.error || err.message || 'Failed to apply manual override');
+    } finally {
+      setIsOverriding(false);
+    }
+  };
+
   if (loading) return null;
 
   const activeExport = exportsList.find(e => e.id === selectedExportId);
@@ -1071,6 +1118,8 @@ function AmexStatementCalculator() {
   });
 
   const finalAmountPartnerOwes = partnerStatement + partnerOwesForMyShops - iOweForPartnerShops;
+  const previewAmount = Number(overrideAmount) || 0;
+  const previewFinalOwes = previewAmount + partnerOwesForMyShops - iOweForPartnerShops;
 
   return (
     <div className="bg-slate-900 rounded-[2rem] p-6 sm:p-8 text-white shadow-xl relative overflow-hidden border border-slate-800">
@@ -1093,7 +1142,7 @@ function AmexStatementCalculator() {
             </div>
             <p className="text-[11px] text-slate-400">
               {tlStatus?.isConnected
-                ? `Auto-polls on 19th • Last settled: ${tlStatus.lastProcessedStatementDate || 'None this cycle'}`
+                ? `Auto-settles on 24th (Statement 20th–19th) • Last settled: ${tlStatus.lastProcessedStatementDate || 'None this cycle'}`
                 : 'Connect American Express to automatically populate Lauren\'s statement and settle monthly'}
             </p>
           </div>
@@ -1199,11 +1248,23 @@ function AmexStatementCalculator() {
             >
               <option value="">Current Month</option>
               {exportsList.map(exp => (
-                <option key={exp.id} value={exp.id}>{exp.name}</option>
+                <option key={exp.id} value={exp.id}>
+                  {exp.name} {exp.isOverridden ? '• [Amended]' : ''}
+                </option>
               ))}
             </select>
 
-            {!isReadOnly && (
+            {isReadOnly ? (
+              <button
+                type="button"
+                onClick={handleOpenOverrideModal}
+                className="flex items-center gap-1.5 text-[10px] text-amber-300 hover:text-white font-bold uppercase tracking-widest bg-amber-500/20 hover:bg-amber-500/40 px-3 py-2 rounded-lg border border-amber-500/30 transition-all shadow-sm"
+                title="Manually adjust Lauren's statement spend and send amended statement email to Sam and Lauren"
+              >
+                <Edit3 size={12} />
+                Manual Override
+              </button>
+            ) : (
               <>
                 <button
                   onClick={handleSettleAndEmail}
@@ -1230,6 +1291,26 @@ function AmexStatementCalculator() {
             )}
           </div>
         </div>
+
+        {/* Alerts & Overridden Status Banners */}
+        {overrideAlert && (
+          <div className="bg-emerald-500/10 border border-emerald-500/25 rounded-2xl p-4 flex items-center justify-between text-xs text-emerald-300 shadow-sm animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5">
+              <CheckCircle2 size={16} className="text-emerald-400 flex-shrink-0" />
+              <span>{overrideAlert.message}</span>
+            </div>
+            <button onClick={() => setOverrideAlert(null)} className="text-emerald-400 hover:text-white font-bold text-xs px-2 py-1 rounded hover:bg-white/10">✕</button>
+          </div>
+        )}
+
+        {activeExport?.isOverridden && (
+          <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 flex items-center gap-3 text-xs text-amber-200 shadow-sm">
+            <AlertTriangle size={18} className="text-amber-400 flex-shrink-0" />
+            <div>
+              <span className="font-bold text-amber-300">Amended Statement (Manual Override):</span> This exported month was manually amended due to an incorrect statement amount{activeExport.overrideReason ? `: "${activeExport.overrideReason}"` : ''}.
+            </div>
+          </div>
+        )}
 
         {/* Add Shop Form (Full Width 12-Column Responsive Grid) */}
         {!isReadOnly && (
@@ -1374,12 +1455,12 @@ function AmexStatementCalculator() {
                 </h3>
                 {tlStatus?.isConnected && (
                   <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
-                    <CheckCircle2 size={10} /> Auto-Syncs 19th
+                    <CheckCircle2 size={10} /> Auto-Syncs 24th
                   </span>
                 )}
               </div>
               <p className="text-[11px] text-slate-400 mb-4">
-                Total charges on Lauren's card for this statement cycle (20th to 19th). Auto-populated by TrueLayer or editable manually.
+                Total charges on Lauren's card for this statement cycle (20th to 19th). Auto-settles on 24th via TrueLayer or editable manually.
               </p>
             </div>
             
@@ -1436,6 +1517,120 @@ function AmexStatementCalculator() {
         </div>
 
       </div>
+
+      {/* Manual Override Modal */}
+      {showOverrideModal && activeExport && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-slate-900 border border-slate-700 rounded-3xl p-6 sm:p-8 max-w-lg w-full text-white shadow-2xl relative">
+            <div className="flex items-center justify-between pb-4 mb-4 border-b border-white/10">
+              <div className="flex items-center gap-2.5">
+                <div className="w-9 h-9 rounded-xl bg-amber-500/20 border border-amber-500/30 flex items-center justify-center text-amber-400">
+                  <Edit3 size={18} />
+                </div>
+                <div>
+                  <h3 className="text-base font-black tracking-tight">Manual Override — {activeExport.name}</h3>
+                  <p className="text-[11px] text-slate-400">Adjust statement total & re-send amended statement</p>
+                </div>
+              </div>
+              <button
+                type="button"
+                onClick={() => setShowOverrideModal(false)}
+                className="text-slate-400 hover:text-white text-lg font-bold px-2 py-1 rounded-lg hover:bg-white/10"
+              >
+                ✕
+              </button>
+            </div>
+
+            <form onSubmit={handleConfirmOverride} className="space-y-4">
+              <div className="bg-amber-500/10 border border-amber-500/25 rounded-2xl p-4 text-xs text-amber-200/90 space-y-1.5">
+                <div className="flex items-center gap-2 font-bold text-amber-300">
+                  <AlertTriangle size={15} />
+                  <span>Outlier & Statement Correction</span>
+                </div>
+                <p className="text-[11px] leading-relaxed text-amber-200/80">
+                  Confirming this manual override will update the archived records for <strong>{activeExport.name}</strong> and immediately re-send an amended statement email to <strong>Sam</strong> and <strong>Lauren</strong> stating that the total was manually updated due to an incorrect statement amount.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                  Lauren's Statement Amount (£)
+                </label>
+                <div className="relative">
+                  <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white font-bold text-lg">£</span>
+                  <input
+                    type="number"
+                    step="0.01"
+                    required
+                    value={overrideAmount}
+                    onChange={e => setOverrideAmount(e.target.value)}
+                    className="w-full bg-slate-800 text-white font-mono font-bold text-xl px-4 py-2.5 pl-8 rounded-xl border border-white/20 outline-none focus:border-amber-400"
+                    placeholder="0.00"
+                    autoFocus
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-1">
+                  Current recorded amount: <span className="font-mono text-slate-300">{formatCurrency(activeExport.partnerStatementAmount)}</span>
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
+                  Reason / Note (Included in Email)
+                </label>
+                <input
+                  type="text"
+                  value={overrideReason}
+                  onChange={e => setOverrideReason(e.target.value)}
+                  className="w-full bg-slate-800 text-white text-xs px-3.5 py-2.5 rounded-xl border border-white/20 outline-none focus:border-amber-400"
+                  placeholder="e.g. July Amazon payment arrived on next statement outlier"
+                />
+              </div>
+
+              <div className="bg-white/5 rounded-2xl p-4 border border-white/10 space-y-2">
+                <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mb-1">
+                  Recalculated Settlement Preview
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">Lauren's Statement Spend</span>
+                  <span className="font-mono text-white font-semibold">{formatCurrency(previewAmount)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs">
+                  <span className="text-slate-400">Lauren owes for Sam's shops ({shops.filter(s=>s.payerName==='Sam').length})</span>
+                  <span className="font-mono text-emerald-400 font-semibold">+{formatCurrency(partnerOwesForMyShops)}</span>
+                </div>
+                <div className="flex justify-between items-center text-xs pb-2 border-b border-white/10">
+                  <span className="text-slate-400">Sam owes for Lauren's shops ({shops.filter(s=>s.payerName!=='Sam').length})</span>
+                  <span className="font-mono text-rose-400 font-semibold">-{formatCurrency(iOweForPartnerShops)}</span>
+                </div>
+                <div className="flex justify-between items-center pt-1">
+                  <span className="text-xs font-bold uppercase text-slate-300">Amended Final Amount Lauren Owes</span>
+                  <span className="font-mono text-xl font-black text-amber-400">{formatCurrency(previewFinalOwes)}</span>
+                </div>
+              </div>
+
+              <div className="flex justify-end gap-3 pt-2">
+                <button
+                  type="button"
+                  onClick={() => setShowOverrideModal(false)}
+                  disabled={isOverriding}
+                  className="px-4 py-2 text-xs font-bold uppercase tracking-wider text-slate-400 hover:text-white rounded-xl hover:bg-white/10 transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="submit"
+                  disabled={isOverriding}
+                  className="flex items-center gap-2 px-5 py-2.5 text-xs font-black uppercase tracking-wider bg-gradient-to-r from-amber-500 to-orange-500 hover:from-amber-400 hover:to-orange-400 text-slate-950 rounded-xl shadow-lg transition-all disabled:opacity-50"
+                >
+                  <Mail size={14} />
+                  {isOverriding ? 'Saving & Sending Email...' : 'Confirm & Send Amended Statement'}
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

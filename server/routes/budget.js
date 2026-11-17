@@ -1,7 +1,7 @@
 import express from 'express'
 import prisma from '../../lib/prisma.js'
 import { requireAuth } from '../../lib/auth.js'
-import { getUniqueExportName, executeSettlementExportAndClear } from '../../lib/settlementAutomation.js'
+import { getUniqueExportName, executeSettlementExportAndClear, executeExportManualOverride } from '../../lib/settlementAutomation.js'
 
 const router = express.Router()
 router.use(requireAuth)
@@ -554,6 +554,26 @@ router.post('/calculator/settle', async (req, res) => {
   } catch (err) {
     console.error('[Manual Settle Error]', err)
     res.status(500).json({ error: err.message || 'Settlement failed' })
+  }
+})
+
+router.post('/calculator/exports/:id/override', async (req, res) => {
+  try {
+    const { partnerStatementAmount, reason } = req.body
+    if (partnerStatementAmount === undefined || isNaN(Number(partnerStatementAmount))) {
+      return res.status(400).json({ error: 'Valid partnerStatementAmount is required' })
+    }
+
+    const result = await executeExportManualOverride({
+      exportId: req.params.id,
+      partnerStatementAmount: Number(partnerStatementAmount),
+      reason: reason || 'Manual override due to incorrect statement amount',
+    })
+
+    res.json({ success: true, ...result })
+  } catch (err) {
+    console.error('[Export Override Error]', err)
+    res.status(500).json({ error: err.message || 'Failed to apply manual override' })
   }
 })
 

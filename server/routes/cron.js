@@ -39,7 +39,7 @@ router.get('/amex-precheck', verifyCronSecret, async (req, res) => {
 
 /**
  * GET /api/cron/amex-settlement
- * Triggered daily/periodically between 19th and 24th to poll TrueLayer and settle
+ * Triggered on the 24th of each month to poll TrueLayer and settle the closed 20th-19th statement
  */
 router.get('/amex-settlement', verifyCronSecret, async (req, res) => {
   try {

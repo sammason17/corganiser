@@ -442,7 +442,10 @@ model SharedAmexExport {
   iOweForPartnerShops    Float?   @map("i_owe_for_partner_shops")
   finalAmountPartnerOwes Float?   @map("final_amount_partner_owes")
   autoExported           Boolean  @default(false) @map("auto_exported")
+  isOverridden           Boolean  @default(false) @map("is_overridden")
+  overrideReason         String?  @map("override_reason")
   createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @default(now()) @map("updated_at")
 
   @@map("shared_amex_exports")
 }
