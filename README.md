@@ -1,6 +1,6 @@
-# My Life
+# Corganiser
 
-A personal life organiser built with React, Node/Express, and PostgreSQL (Neon). Manage tasks, track time, plan workouts, track monthly finances, and pay off debt — all in one place. Deploy your own instance, set a registration code, and share it with whoever you want.
+A personal and family life organiser built with React, Node/Express, and PostgreSQL (Neon). Manage tasks, track time, plan workouts, track monthly finances, and pay off debt — all in one place. Deploy your own instance, set a registration code, and invite family members into your household.
 
 ## Stack
 
@@ -14,7 +14,7 @@ A personal life organiser built with React, Node/Express, and PostgreSQL (Neon).
 
 ### Tasks
 - Private tasks with status (To Do / In Progress / Done), priority, due dates, and multi-category assignment
-- Shared tasks and categories visible across both users
+- Shared tasks and categories scoped to your Household / Family (private to household members)
 - Per-task notes log — append-only updates with timestamps and author
 - Time logging per task with running totals
 - Board and list views with filtering by status, priority, and category
@@ -46,18 +46,19 @@ A personal life organiser built with React, Node/Express, and PostgreSQL (Neon).
 - **Monthly expenses** — add personal fixed costs; flag any item as "Credit Card" to include it in the credit card projection
 - **Leftover budget** — automatically calculated: Total Income − My share of bills − Monthly expenses − Debt monthly payments
 - **Spending pie chart** — assign budget categories (with custom colours) to bills and expenses; a live conic-gradient pie chart shows your breakdown
-- **Credit Card Projection**:
-  - Define an explicit **"Credit Card Allowance"** for your day-to-day spending limit (food, fuel, leisure)
-  - Log recurring monthly card charges (subscriptions, bills) with configurable full vs. **personal portion** splits
+- **Primary & Secondary Cards Projection**:
+  - Define an explicit **"Primary Card Allowance"** for your day-to-day spending limit (food, fuel, leisure)
+  - Log recurring monthly primary card charges (subscriptions, bills) with configurable full vs. **personal portion** splits
   - **Grocery shop tracker** — log individual shops with a name, total bill, and your personal portion; date-stamped
-  - **Non-Card expenses** — log additional expenses made on other accounts that should still count towards your day-to-day spending limit
-  - **Expected statement** = full recurring payments + full grocery totals + fixed card expenses
+  - **Secondary Cards expenses** — log additional expenses made on other accounts that should still count towards your day-to-day spending limit
+  - **Expected statement** = full recurring payments + full grocery totals + fixed primary card expenses
   - **Financial breakdown** = cleanly isolates your fixed commitments from your flexible day-to-day spend
-  - Overspend warning banner strictly monitors your day-to-day spend (grocery portions + non-card) against your Monthly Allowance limit
-- **Shared Credit Card Statement Calculator & Automation**:
+  - Overspend warning banner strictly monitors your day-to-day spend (grocery portions + secondary cards) against your Primary Card Allowance limit
+- **Shared Statement Calculator & Automation**:
   - Track shared food/grocery shops between family members with custom covered amounts.
+  - **Dynamic Member & Cardholder Resolution**: Cardholder name is extracted directly from TrueLayer Open Banking (`name_on_card` / `display_name`). The calculator dynamically maps household members into "Who Paid?" selectors, computes individual balance splits, and addresses settlement emails to the exact resolved family members without hardcoding.
   - **Account Live Sync (TrueLayer)**: Connects the supplementary card account, isolates charges for each billing cycle (20th–19th), and auto-populates the statement spend with zero manual math.
-  - > **Note on Card Providers**: The shared calculator and live sync were designed around American Express's monthly statement cycle (closing on the 19th and settling on the 24th). If other credit card providers expose additional statement metadata via TrueLayer Open Banking in the future, the sync service can be extended to poll them; currently, live sync polling is optimized around this cycle.
+  - > **Note on Card Providers**: The shared calculator and live sync are designed around monthly statement cycles (closing on the 19th and settling on the 24th). If other credit card providers expose additional statement metadata via TrueLayer Open Banking in the future, the sync service can be extended to poll them; currently, live sync polling is optimized around this cycle.
   - **Settlement Timing & 24th Cron Schedule**:
     - Statements close on the **19th** of each month (covering transactions from the 20th of the previous month to the 19th of the current month).
     - The automated settlement cron runs on the **24th at 09:00 UTC** (`0 9 24 * *`) — giving a 5-day buffer for all weekend purchases, pending authorizations, and delayed merchant charges (e.g. Amazon dispatch-based billing) to fully clear before month-end payday.
@@ -73,6 +74,7 @@ A personal life organiser built with React, Node/Express, and PostgreSQL (Neon).
   - **Vercel Cron Integration**: Runs automated pre-check (18th) and settlement (24th) crons securely in production via `CRON_SECRET`.
 - **Household & Family Sharing**:
   - Multi-tenant household isolation: Users belong to a `Family` with role management (`OWNER`, `MEMBER`) and unique invite codes (e.g. `FAM-XYZ123`).
+  - Household management is available directly in **Settings → Household** (view members, copy/regenerate invite codes, rename household, join new family) and via the **Household** header button on the Budget dashboard.
   - Shared card connections, food shop logs, and settlement summaries are isolated per family — keeping all financial data and email communications strictly private to that household.
 
 ## Local Development
@@ -103,7 +105,7 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 | `JWT_EXPIRES_IN` | Token expiry e.g. `7d` |
 | `REGISTRATION_CODE` | Invite code required to register |
 | `RESEND_API_KEY` | Resend API key for automated emails |
-| `RESEND_FROM_EMAIL` | Sender address e.g. `Corganiser <sam@goardr.com>` |
+| `RESEND_FROM_EMAIL` | Sender address e.g. `Corganiser <noreply@corganiser.co.uk>` |
 | `TRUELAYER_CLIENT_ID` | TrueLayer Data API client ID |
 | `TRUELAYER_CLIENT_SECRET` | TrueLayer Data API client secret |
 | `TRUELAYER_ENV` | TrueLayer environment: `live` or `sandbox` |
@@ -171,9 +173,10 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 | POST/PUT/DELETE | `/api/budget/categories/:id?` | Manage budget categories |
 | POST/PUT/DELETE | `/api/budget/shared-bills/:id?` | Manage shared household bills |
 | POST/PUT/DELETE | `/api/budget/expenses/:id?` | Manage monthly expenses |
-| POST/PUT/DELETE | `/api/budget/amex/recurring/:id?` | Manage recurring credit card payments |
-| POST/PUT/DELETE | `/api/budget/amex/grocery/:id?` | Manage grocery shop entries |
-| POST/PUT/DELETE | `/api/budget/non-amex/:id?` | Manage non-card expenses |
+| POST/PUT/DELETE | `/api/budget/primary-card/recurring/:id?` | Manage recurring primary card payments |
+| POST/PUT/DELETE | `/api/budget/primary-card/grocery/:id?` | Manage grocery shop entries |
+| POST/PUT/DELETE | `/api/budget/secondary-cards/:id?` | Manage secondary card expenses |
+| GET | `/api/budget/calculator/state` | Fetch live calculator state, active family members, and resolved cardholder names |
 | GET/POST/DELETE | `/api/budget/calculator/shops/:id?` | Manage shared food shops (scoped to family) |
 | GET/PUT | `/api/budget/calculator/statement` | Read / update statement amount for family |
 | GET/POST | `/api/budget/calculator/exports` | View and create duplicate-safe exports for family |
@@ -203,7 +206,7 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 ### Scheduled Crons
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/cron/amex-precheck` | 18th pre-statement check reminder across active families (Bearer CRON_SECRET) |
-| GET | `/api/cron/amex-settlement` | 24th monthly settlement & email runner across active families (Bearer CRON_SECRET) |
+| GET | `/api/cron/precheck` | 18th pre-statement check reminder across active families (Bearer CRON_SECRET) |
+| GET | `/api/cron/settlement` | 24th monthly settlement & email runner across active families (Bearer CRON_SECRET) |
 
 All endpoints except register, login, the calendar feed, and OAuth callback require an `Authorization: Bearer <token>` header.

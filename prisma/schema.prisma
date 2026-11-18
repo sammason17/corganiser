@@ -12,7 +12,7 @@ model User {
   name         String
   email        String   @unique
   passwordHash  String   @map("password_hash")
-  amexAllowance Float    @default(0) @map("amex_allowance")
+  primaryCardAllowance Float    @default(0) @map("primary_card_allowance")
   createdAt     DateTime @default(now()) @map("created_at")
 
   weatherPostcode String? @map("weather_postcode")
@@ -41,9 +41,9 @@ model User {
   budgetCategories   BudgetCategory[]   @relation("UserBudgetCategories")
   budgetSharedBills  BudgetSharedBill[] @relation("UserBudgetSharedBills")
   budgetExpenses     BudgetExpense[]    @relation("UserBudgetExpenses")
-  amexRecurring      AmexRecurring[]    @relation("UserAmexRecurring")
-  amexGroceryShops   AmexGroceryShop[]  @relation("UserAmexGrocery")
-  nonAmexExpenses    NonAmexExpense[]   @relation("UserNonAmexExpenses")
+  primaryCardRecurring PrimaryCardRecurring[] @relation("UserPrimaryCardRecurring")
+  primaryCardGroceryShops PrimaryCardGroceryShop[] @relation("UserPrimaryCardGrocery")
+  secondaryCardExpenses SecondaryCardExpense[] @relation("UserSecondaryCardExpenses")
 
   // Family module
   familyMemberships  FamilyMember[]
@@ -365,12 +365,12 @@ model BudgetSharedBill {
 }
 
 model BudgetExpense {
-  id        String   @id @default(cuid())
-  name      String
-  amount    Float
-  isAmex    Boolean  @default(false) @map("is_amex")
-  sortOrder Int      @default(0) @map("sort_order")
-  createdAt DateTime @default(now()) @map("created_at")
+  id            String   @id @default(cuid())
+  name          String
+  amount        Float
+  isPrimaryCard Boolean  @default(false) @map("is_primary_card")
+  sortOrder     Int      @default(0) @map("sort_order")
+  createdAt     DateTime @default(now()) @map("created_at")
 
   categoryId String? @map("category_id")
   category   BudgetCategory? @relation(fields: [categoryId], references: [id], onDelete: SetNull)
@@ -381,20 +381,20 @@ model BudgetExpense {
   @@map("budget_expenses")
 }
 
-model AmexRecurring {
+model PrimaryCardRecurring {
   id              String   @id @default(cuid())
   name            String
   amount          Float
   myPortionAmount Float?   @map("my_portion_amount")
-  createdAt DateTime @default(now()) @map("created_at")
+  createdAt       DateTime @default(now()) @map("created_at")
 
   ownerId String @map("owner_id")
-  owner   User   @relation("UserAmexRecurring", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner   User   @relation("UserPrimaryCardRecurring", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  @@map("amex_recurring")
+  @@map("primary_card_recurring")
 }
 
-model AmexGroceryShop {
+model PrimaryCardGroceryShop {
   id              String   @id @default(cuid())
   name            String   @default("Shop")
   date            DateTime @default(now())
@@ -403,21 +403,21 @@ model AmexGroceryShop {
   createdAt       DateTime @default(now()) @map("created_at")
 
   ownerId String @map("owner_id")
-  owner   User   @relation("UserAmexGrocery", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner   User   @relation("UserPrimaryCardGrocery", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  @@map("amex_grocery_shops")
+  @@map("primary_card_grocery_shops")
 }
 
-model NonAmexExpense {
+model SecondaryCardExpense {
   id        String   @id @default(cuid())
   name      String
   amount    Float
   createdAt DateTime @default(now()) @map("created_at")
 
   ownerId String @map("owner_id")
-  owner   User   @relation("UserNonAmexExpenses", fields: [ownerId], references: [id], onDelete: Cascade)
+  owner   User   @relation("UserSecondaryCardExpenses", fields: [ownerId], references: [id], onDelete: Cascade)
 
-  @@map("non_amex_expenses")
+  @@map("secondary_card_expenses")
 }
 
 // ── Family & Households ────────────────────────────────────────────────────────
@@ -430,10 +430,10 @@ model Family {
   updatedAt  DateTime @updatedAt @map("updated_at")
 
   members          FamilyMember[]
-  foodShops        SharedAmexFoodShop[]
-  exports          SharedAmexExport[]
-  state            SharedAmexState?
-  automationConfig AmexAutomationConfig?
+  foodShops        SharedFoodShop[]
+  exports          SharedStatementExport[]
+  state            SharedStatementState?
+  automationConfig CardAutomationConfig?
   tasks            Task[]
   categories       Category[]
 
@@ -456,7 +456,7 @@ model FamilyMember {
 
 // ── Shared Calculator ─────────────────────────────────────────────────────────
 
-model SharedAmexFoodShop {
+model SharedFoodShop {
   id                 String   @id @default(cuid())
   vendorName         String   @map("vendor_name")
   date               DateTime @default(now())
@@ -468,10 +468,10 @@ model SharedAmexFoodShop {
   familyId           String?  @map("family_id")
   family             Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
-  @@map("shared_amex_food_shops")
+  @@map("shared_food_shops")
 }
 
-model SharedAmexState {
+model SharedStatementState {
   id                     String   @id @default(cuid())
   partnerStatementAmount Float    @default(0) @map("partner_statement_amount")
   updatedAt              DateTime @updatedAt @map("updated_at")
@@ -479,10 +479,10 @@ model SharedAmexState {
   familyId               String?  @unique @map("family_id")
   family                 Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
-  @@map("shared_amex_state")
+  @@map("shared_statement_state")
 }
 
-model SharedAmexExport {
+model SharedStatementExport {
   id                     String   @id @default(cuid())
   name                   String
   partnerStatementAmount Float    @map("partner_statement_amount")
@@ -502,10 +502,10 @@ model SharedAmexExport {
   family                 Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
   @@unique([familyId, name])
-  @@map("shared_amex_exports")
+  @@map("shared_statement_exports")
 }
 
-model AmexAutomationConfig {
+model CardAutomationConfig {
   id                         String    @id @default(cuid())
   accessToken                String?   @map("access_token")
   refreshToken               String?   @map("refresh_token")
@@ -515,7 +515,7 @@ model AmexAutomationConfig {
   cardAccountId              String?   @map("card_account_id")
   cardholderName             String?   @map("cardholder_name")
   cardDisplayName            String?   @map("card_display_name")
-  laurenSupplementaryCardId  String?   @map("lauren_supplementary_card_id")
+  supplementaryCardId        String?   @map("supplementary_card_id")
 
   lastKnownStatementDate     String?   @map("last_known_statement_date")
   lastProcessedStatementDate String?   @map("last_processed_statement_date")
@@ -532,5 +532,5 @@ model AmexAutomationConfig {
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")
 
-  @@map("amex_automation_config")
+  @@map("card_automation_config")
 }

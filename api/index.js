@@ -661,7 +661,7 @@ app.get('/api/calendar/feed', async (req, res) => {
 
       return [
         'BEGIN:VEVENT',
-        `UID:task-${task.id}@my-life`,
+        `UID:task-${task.id}@corganiser`,
         `DTSTAMP:${stamp}`,
         `DTSTART;VALUE=DATE:${start}`,
         `DTEND;VALUE=DATE:${end}`,
@@ -675,7 +675,7 @@ app.get('/api/calendar/feed', async (req, res) => {
     const ics = [
       'BEGIN:VCALENDAR',
       'VERSION:2.0',
-      'PRODID:-//My Life//EN',
+      'PRODID:-//Corganiser//EN',
       'CALSCALE:GREGORIAN',
       'METHOD:PUBLISH',
       'X-WR-CALNAME:My Tasks',

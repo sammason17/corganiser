@@ -1,4 +1,4 @@
-# My Life — Setup Guide
+# Corganiser — Setup Guide
 
 ## Prerequisites
 - Node.js v18+
@@ -62,7 +62,7 @@ git init
 git add .
 git commit -m "Initial commit"
 # Create a repo on GitHub, then:
-git remote add origin https://github.com/YOUR_USERNAME/my-life.git
+git remote add origin https://github.com/YOUR_USERNAME/corganiser.git
 git push -u origin main
 ```
 
@@ -75,7 +75,7 @@ git push -u origin main
    - `JWT_SECRET` — your JWT secret
    - `REGISTRATION_CODE` — your invite code
    - `RESEND_API_KEY` — your Resend API key
-   - `RESEND_FROM_EMAIL` — sender address e.g. `Corganiser <sam@goardr.com>`
+   - `RESEND_FROM_EMAIL` — sender address e.g. `Corganiser <noreply@corganiser.co.uk>`
    - `TRUELAYER_CLIENT_ID` — your TrueLayer client ID
    - `TRUELAYER_CLIENT_SECRET` — your TrueLayer client secret
    - `TRUELAYER_ENV` — `live` or `sandbox`
@@ -146,12 +146,54 @@ Default categories (Strength, Cardio, Mobility, HIIT, Flexibility) and body area
 
 ---
 
+## Household & Family Sharing
+
+Corganiser features a multi-tenant family model allowing multiple households to use the same instance independently.
+
+### How it works
+- **Membership**: Each user belongs to a `Family` as either `OWNER` or `MEMBER`.
+- **Invite codes**: The household owner can copy or regenerate a unique family invite code (e.g. `FAM-XYZ123`). New or existing users can enter this code to join the household.
+- **Data isolation**: Shared tasks (`isShared: true`), shared household bills, food shops, credit card live sync connections, and settlement emails are strictly isolated to members of that specific family.
+- **Management UI**:
+  - **Settings → Household**: View members, copy/regenerate invite code, rename household, or join a different household.
+  - **Budget page**: Click the **Household** header button to view and manage the household roster without leaving the finance dashboard.
+
+---
+
+## Debt Calculator (DebtFlow)
+
+Track and simulate payoff schedules across multiple credit cards and balance transfers.
+
+- **Dynamic daily balances**: Tracks daily balances using the Average Daily Balance (ADB) method between statement dates and payment dates.
+- **0% Balance transfer promotions**: Configure promotional 0% interest end dates and future payment step-ups.
+- **Waterfall payoff allocation**: Simulates payments directed towards high APR interest balances first, then balance transfers.
+- **Snapshot & recalculation**: Edit any card to snapshot the current balance as the new baseline.
+
+---
+
+## Budget & Shared Credit Card Statement Calculator
+
+### Monthly Budget
+- Income, fixed monthly expenses, and shared household bills with custom split percentages (50/50, 100%, 33%).
+- Day-to-day spending allowance with an overspend monitor.
+- Recurring credit card charges and grocery shop logs.
+
+### Shared Statement Calculator & Live Sync
+- **Dynamic member & cardholder resolution**: Cardholder name is extracted directly from TrueLayer Open Banking (`name_on_card` / `display_name`). The calculator dynamically maps household members into "Who Paid?" selectors, computes individual balance splits, and addresses settlement emails to the exact resolved family members without hardcoded names.
+- **TrueLayer live sync**: Automatically polls supplementary credit card transactions for each billing cycle (closing on the 19th).
+  > **Note on Card Providers**: Designed around monthly statement cycles (closing on the 19th, settling on the 24th). If other providers share statement metadata via TrueLayer in the future, the polling logic can be adapted accordingly.
+- **Automated settlement cron**: Runs on the **24th at 09:00 UTC** via Vercel Cron, giving a 5-day clearance window for pending authorizations and delayed merchant charges.
+- **Resend email dispatch**: Automatically dispatches pre-statement reminders on the 18th and finalized itemized settlement summaries on the 24th using `noreply@corganiser.co.uk`.
+- **Manual override**: If merchant discrepancies occur, leads can click **Manual Override** on any past export to adjust the statement spend. The system recalculates splits, updates records (`isOverridden: true`), and sends an amended settlement email to the family.
+
+---
+
 ## API Summary
 
 ### Auth & Users
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| POST | /api/auth/register | No | Register with invite code · rate limited |
+| POST | /api/auth/register | No | Register with registration code · rate limited |
 | POST | /api/auth/login | No | Login → returns JWT · rate limited |
 | PUT | /api/auth/update-password | Yes | Change password |
 | GET | /api/users/me | Yes | Get own profile |
@@ -160,7 +202,7 @@ Default categories (Strength, Cardio, Mobility, HIIT, Flexibility) and body area
 ### Tasks
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET/POST | /api/tasks | Yes | List (filterable) / create tasks |
+| GET/POST | /api/tasks | Yes | List (filterable) / create tasks (shared tasks scoped to family) |
 | GET/PUT/DELETE | /api/tasks/:id | Yes | Read / update / delete task |
 | GET/POST | /api/tasks/:id/updates | Yes | Notes log |
 | GET/POST | /api/tasks/:id/time-logs | Yes | Time logging |
@@ -191,7 +233,58 @@ Default categories (Strength, Cardio, Mobility, HIIT, Flexibility) and body area
 | PATCH | /api/workout/plans/:id/activate | Yes | Set as the active plan |
 | PATCH | /api/workout/day-exercises/:id/complete | Yes | Record completion (saves last sets/reps/weight) |
 
-*The calendar feed authenticates via a signed query-string token as calendar apps cannot send `Authorization` headers.
+### Debt Calculator (DebtFlow)
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET/POST | /api/debt/cards | Yes | List / create debt cards (with balance transfers) |
+| PUT/DELETE | /api/debt/cards/:id | Yes | Update or delete debt card |
+
+### Budget & Finances
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | /api/budget/all | Yes | Fetch all budget data in one call |
+| PUT | /api/budget/allowance | Yes | Update credit card allowance limit |
+| POST/PUT/DELETE | /api/budget/incomes/:id? | Yes | Manage income sources |
+| POST/PUT/DELETE | /api/budget/categories/:id? | Yes | Manage budget categories |
+| POST/PUT/DELETE | /api/budget/shared-bills/:id? | Yes | Manage shared household bills |
+| POST/PUT/DELETE | /api/budget/expenses/:id? | Yes | Manage monthly expenses |
+| POST/PUT/DELETE | /api/budget/primary-card/recurring/:id? | Yes | Manage primary card recurring |
+| POST/PUT/DELETE | /api/budget/primary-card/grocery/:id? | Yes | Manage grocery shops |
+| POST/PUT/DELETE | /api/budget/secondary-cards/:id? | Yes | Manage secondary cards expenses |
+| GET | /api/budget/calculator/state | Yes | Fetch live calculator state, active family members, and resolved cardholder names |
+| GET/POST/DELETE | /api/budget/calculator/shops/:id? | Yes | Manage shared food shops (scoped to family) |
+| GET/PUT | /api/budget/calculator/statement | Yes | Read / update statement amount for family |
+| GET/POST | /api/budget/calculator/exports | Yes | View and create duplicate-safe exports for family |
+| POST | /api/budget/calculator/exports/:id/override | Yes | Manually override exported month & re-send amended email to family |
+| POST | /api/budget/calculator/settle | Yes | Settle month, dispatch emails strictly to family, and reset |
+
+### Household & Family Sharing
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | /api/family/current | Yes | Get current family details, members list, and invite code |
+| POST | /api/family/join | Yes | Join a family using an invite code |
+| PUT | /api/family/name | Yes | Rename the family (Owner only) |
+| POST | /api/family/invite-code/regenerate | Yes | Regenerate family invite code (Owner only) |
+| DELETE | /api/family/members/:userId | Yes | Remove a member from the family (Owner only) |
+
+### TrueLayer Open Banking
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | /api/truelayer/status | Yes | Current sync state and consent remaining for family |
+| GET | /api/truelayer/auth-url | Yes | Generate OAuth authorization URL (encodes familyId in state) |
+| GET/POST | /api/truelayer/callback | No* | OAuth callback to exchange authorization code and link to family |
+| GET | /api/truelayer/cards | Yes | List cards connected under family account |
+| POST | /api/truelayer/config | Yes | Update card account ID for family |
+| POST | /api/truelayer/sync-now | Yes | On-demand statement check & settlement for family |
+| POST | /api/truelayer/disconnect | Yes | Disconnect TrueLayer and clear tokens for family |
+
+### Scheduled Crons
+| Method | Endpoint | Auth | Description |
+|--------|----------|------|-------------|
+| GET | /api/cron/precheck | Yes* | 18th pre-statement check reminder across active families |
+| GET | /api/cron/settlement | Yes* | 24th monthly settlement & email runner across active families |
+
+*\*The calendar feed authenticates via a signed query-string token. TrueLayer OAuth callback authenticates via OAuth state token. Cron endpoints authenticate via `Authorization: Bearer <CRON_SECRET>`.*
 
 ### Task filtering (`GET /api/tasks`)
 | Param | Values | Notes |

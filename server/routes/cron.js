@@ -24,29 +24,29 @@ function verifyCronSecret(req, res, next) {
 }
 
 /**
- * GET /api/cron/amex-precheck
+ * GET /api/cron/precheck
  * Triggered on the 18th of each month to send pre-statement reminder to family lead
  */
-router.get('/amex-precheck', verifyCronSecret, async (req, res) => {
+router.get('/precheck', verifyCronSecret, async (req, res) => {
   try {
     const result = await run18thPrecheckReminder()
     res.json({ success: true, timestamp: new Date().toISOString(), result })
   } catch (err) {
-    console.error('[Cron amex-precheck Error]', err)
+    console.error('[Cron precheck Error]', err)
     res.status(500).json({ error: err.message })
   }
 })
 
 /**
- * GET /api/cron/amex-settlement
+ * GET /api/cron/settlement
  * Triggered on the 24th of each month to poll TrueLayer and settle the closed 20th-19th statement
  */
-router.get('/amex-settlement', verifyCronSecret, async (req, res) => {
+router.get('/settlement', verifyCronSecret, async (req, res) => {
   try {
     const result = await checkAndRunStatementSettlement()
     res.json({ success: true, timestamp: new Date().toISOString(), result })
   } catch (err) {
-    console.error('[Cron amex-settlement Error]', err)
+    console.error('[Cron settlement Error]', err)
     res.status(500).json({ error: err.message })
   }
 })

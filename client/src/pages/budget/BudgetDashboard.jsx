@@ -15,7 +15,9 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currenc
 
 export default function BudgetDashboard() {
   const [data, setData] = useState({
-    incomes: [], categories: [], sharedBills: [], expenses: [], amexRecurring: [], amexGrocery: [], nonAmexExpenses: [], amexAllowance: 0
+    incomes: [], categories: [], sharedBills: [], expenses: [], 
+    primaryCardRecurring: [], primaryCardGrocery: [], secondaryCardExpenses: [], primaryCardAllowance: 0,
+    cardRecurring: [], cardGrocery: [], nonCardExpenses: [], cardAllowance: 0
   });
   const [debtCards, setDebtCards] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -121,7 +123,18 @@ export default function BudgetDashboard() {
       ]);
 
       if (budgetResult.status === 'fulfilled') {
-        setData(budgetResult.value);
+        const bData = budgetResult.value;
+        setData({
+          ...bData,
+          primaryCardRecurring: bData.primaryCardRecurring || bData.cardRecurring || [],
+          primaryCardGrocery: bData.primaryCardGrocery || bData.cardGrocery || [],
+          secondaryCardExpenses: bData.secondaryCardExpenses || bData.secondaryCards || bData.nonCardExpenses || [],
+          primaryCardAllowance: bData.primaryCardAllowance ?? bData.cardAllowance ?? 0,
+          cardRecurring: bData.primaryCardRecurring || bData.cardRecurring || [],
+          cardGrocery: bData.primaryCardGrocery || bData.cardGrocery || [],
+          nonCardExpenses: bData.secondaryCardExpenses || bData.secondaryCards || bData.nonCardExpenses || [],
+          cardAllowance: bData.primaryCardAllowance ?? bData.cardAllowance ?? 0,
+        });
       } else {
         const status = budgetResult.reason?.response?.status;
         const msg = budgetResult.reason?.response?.data?.error || budgetResult.reason?.message || 'Unknown error';
@@ -176,26 +189,30 @@ export default function BudgetDashboard() {
     return segment;
   }).join(', ');
 
-  // Amex Area calculations
-  const totalAmexRecurringFull = useMemo(() => data.amexRecurring.reduce((s, i) => s + i.amount, 0), [data.amexRecurring]);
-  const totalAmexRecurringMine = useMemo(() => data.amexRecurring.reduce((s, i) => s + (i.myPortionAmount ?? i.amount), 0), [data.amexRecurring]);
-  const totalAmexExpenses = useMemo(() => data.expenses.filter(e => e.isAmex).reduce((s, e) => s + e.amount, 0), [data.expenses]);
-  const totalNonAmex = useMemo(() => data.nonAmexExpenses?.reduce((s, i) => s + i.amount, 0) || 0, [data.nonAmexExpenses]);
+  // Primary & Secondary Cards Area calculations
+  const primaryCardRecurring = data.primaryCardRecurring || data.cardRecurring || [];
+  const primaryCardGrocery = data.primaryCardGrocery || data.cardGrocery || [];
+  const secondaryCardExpenses = data.secondaryCardExpenses || data.secondaryCards || data.nonCardExpenses || [];
+
+  const totalPrimaryCardRecurringFull = useMemo(() => primaryCardRecurring.reduce((s, i) => s + i.amount, 0), [primaryCardRecurring]);
+  const totalPrimaryCardRecurringMine = useMemo(() => primaryCardRecurring.reduce((s, i) => s + (i.myPortionAmount ?? i.amount), 0), [primaryCardRecurring]);
+  const totalPrimaryCardExpenses = useMemo(() => data.expenses.filter(e => e.isPrimaryCard || e.isCreditCard).reduce((s, e) => s + e.amount, 0), [data.expenses]);
+  const totalSecondaryCards = useMemo(() => secondaryCardExpenses.reduce((s, i) => s + i.amount, 0), [secondaryCardExpenses]);
 
   // Grocery totals
-  const totalAmexGroceryFull = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.totalAmount, 0), [data.amexGrocery]);
-  const totalAmexGroceryMine = useMemo(() => data.amexGrocery.reduce((s, i) => s + i.myPortionAmount, 0), [data.amexGrocery]);
+  const totalPrimaryCardGroceryFull = useMemo(() => primaryCardGrocery.reduce((s, i) => s + i.totalAmount, 0), [primaryCardGrocery]);
+  const totalPrimaryCardGroceryMine = useMemo(() => primaryCardGrocery.reduce((s, i) => s + i.myPortionAmount, 0), [primaryCardGrocery]);
 
-  const effectiveDayToDayBudget = data.amexAllowance || 0;
+  const effectiveDayToDayBudget = data.primaryCardAllowance ?? data.cardAllowance ?? 0;
 
-  // Statement = recurring(full) + fixed amex expenses + full grocery (Note: does NOT include Allowance to avoid double counting)
-  const expectedAmexStatement = totalAmexRecurringFull + totalAmexExpenses + totalAmexGroceryFull;
+  // Statement = recurring(full) + fixed primary card expenses + full grocery (Note: does NOT include Allowance to avoid double counting)
+  const expectedPrimaryCardStatement = totalPrimaryCardRecurringFull + totalPrimaryCardExpenses + totalPrimaryCardGroceryFull;
   
-  // My true portion = my recurring + fixed amex expenses + my grocery + non-amex
-  const myAmexPortion = totalAmexRecurringMine + totalAmexExpenses + totalAmexGroceryMine + totalNonAmex;
+  // My true portion = my recurring + fixed primary card expenses + my grocery + secondary cards
+  const myPrimaryCardPortion = totalPrimaryCardRecurringMine + totalPrimaryCardExpenses + totalPrimaryCardGroceryMine + totalSecondaryCards;
   
-  // Warning calculation
-  const myDayToDaySpend = totalAmexGroceryMine + totalNonAmex;
+  // Warning calculation: day-to-day spend strictly monitors grocery portions + secondary cards
+  const myDayToDaySpend = totalPrimaryCardGroceryMine + totalSecondaryCards;
   const groceryOverBudget = effectiveDayToDayBudget > 0 && myDayToDaySpend > effectiveDayToDayBudget;
   const overspendAmount = myDayToDaySpend - effectiveDayToDayBudget;
 
@@ -320,7 +337,7 @@ export default function BudgetDashboard() {
           </div>
 
           {/* 1. Shared Credit Card Statement Calculator (Shared Settlement) */}
-          <AmexStatementCalculator />
+          <SharedCreditCardStatementCalculator />
 
           {/* 2. Credit Card Projection */}
           <div className="bg-indigo-950 rounded-[2rem] p-8 text-white shadow-xl overflow-hidden relative">
@@ -330,22 +347,22 @@ export default function BudgetDashboard() {
               <div className="flex items-center gap-3">
                 <CreditCard size={28} className="text-indigo-400" />
                 <div>
-                  <h2 className="text-2xl font-black tracking-tight">Credit Card Projection</h2>
+                  <h2 className="text-2xl font-black tracking-tight">Primary Card Projection</h2>
                   <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mt-1">Expected Statement Tracker</p>
                 </div>
               </div>
               <div className="bg-white/10 rounded-xl p-3 border border-white/20 flex items-center gap-3 shadow-inner">
                 <div>
-                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest">Credit Card Allowance</p>
+                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest">Primary Card Allowance</p>
                   <p className="text-xs text-indigo-200">Base budget limit</p>
                 </div>
                 <div className="relative">
                   <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white font-bold">£</span>
                   <input 
                     type="number"
-                    value={data.amexAllowance || ''}
-                    onChange={(e) => setData({...data, amexAllowance: Number(e.target.value) || 0})}
-                    onBlur={(e) => api.updateAmexAllowance(Number(e.target.value) || 0)}
+                    value={data.primaryCardAllowance ?? data.cardAllowance ?? ''}
+                    onChange={(e) => setData({...data, primaryCardAllowance: Number(e.target.value) || 0, cardAllowance: Number(e.target.value) || 0})}
+                    onBlur={(e) => api.updatePrimaryCardAllowance(Number(e.target.value) || 0)}
                     className="w-24 bg-indigo-950/50 text-white font-mono font-bold text-lg px-3 py-2 pl-7 rounded-lg border border-indigo-400/30 outline-none focus:border-indigo-400"
                   />
                 </div>
@@ -355,23 +372,23 @@ export default function BudgetDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
-                  <Repeat size={12} /> Recurring Credit Card Payments
+                  <Repeat size={12} /> Recurring Primary Card Payments
                 </h3>
-                <AmexRecurringList data={data.amexRecurring} refresh={fetchData} amexExpenses={data.expenses.filter(e => e.isAmex)} />
+                <PrimaryCardRecurringList data={primaryCardRecurring} refresh={fetchData} cardExpenses={data.expenses.filter(e => e.isPrimaryCard || e.isCreditCard)} />
               </div>
 
               <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-300 flex items-center gap-2">
-                    <Wallet size={12} /> Non-Card Expenses
+                    <Wallet size={12} /> Secondary Cards Expenses
                   </h3>
-                  {data.nonAmexExpenses?.length > 0 && (
-                    <button onClick={() => { if(window.confirm('Clear all non-card expenses?')) { api.clearNonAmex().then(fetchData) } }} className="text-[9px] text-rose-400 hover:text-white font-bold uppercase tracking-widest bg-rose-400/10 hover:bg-rose-500/50 px-2 py-1 rounded transition-colors">
+                  {secondaryCardExpenses?.length > 0 && (
+                    <button onClick={() => { if(window.confirm('Clear all secondary cards expenses?')) { api.clearSecondaryCardExpenses().then(fetchData) } }} className="text-[9px] text-rose-400 hover:text-white font-bold uppercase tracking-widest bg-rose-400/10 hover:bg-rose-500/50 px-2 py-1 rounded transition-colors">
                       Clear All
                     </button>
                   )}
                 </div>
-                <NonAmexExpenseList data={data.nonAmexExpenses || []} refresh={fetchData} />
+                <SecondaryCardExpenseList data={secondaryCardExpenses} refresh={fetchData} />
               </div>
 
               <div className="lg:col-span-2 bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
@@ -379,13 +396,13 @@ export default function BudgetDashboard() {
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 flex items-center gap-2">
                     <ShoppingCart size={12} /> Grocery Shop Tracker
                   </h3>
-                  {data.amexGrocery?.length > 0 && (
-                    <button onClick={() => { if(window.confirm('Clear all grocery shops?')) { api.clearAmexGrocery().then(fetchData) } }} className="text-[9px] text-indigo-400 hover:text-white font-bold uppercase tracking-widest bg-indigo-400/10 hover:bg-indigo-500/50 px-2 py-1 rounded transition-colors">
+                  {primaryCardGrocery?.length > 0 && (
+                    <button onClick={() => { if(window.confirm('Clear all grocery shops?')) { api.clearPrimaryCardGrocery().then(fetchData) } }} className="text-[9px] text-indigo-400 hover:text-white font-bold uppercase tracking-widest bg-indigo-400/10 hover:bg-indigo-500/50 px-2 py-1 rounded transition-colors">
                       Clear All
                     </button>
                   )}
                 </div>
-                <AmexGroceryList data={data.amexGrocery} refresh={fetchData} />
+                <PrimaryCardGroceryList data={primaryCardGrocery} refresh={fetchData} />
               </div>
             </div>
 
@@ -395,7 +412,7 @@ export default function BudgetDashboard() {
                 <div>
                   <p className="text-red-300 font-black text-xs uppercase tracking-widest">Budget exceeded!</p>
                   <p className="text-red-200 text-xs mt-1">
-                    Your day-to-day spend (grocery + non-card) is <span className="font-bold">{formatCurrency(myDayToDaySpend)}</span>, which exceeds your day-to-day limit of <span className="font-bold">{formatCurrency(effectiveDayToDayBudget)}</span> by <span className="font-bold text-red-400">{formatCurrency(overspendAmount)}</span>.
+                    Your day-to-day spend (grocery + secondary cards) is <span className="font-bold">{formatCurrency(myDayToDaySpend)}</span>, which exceeds your day-to-day limit of <span className="font-bold">{formatCurrency(effectiveDayToDayBudget)}</span> by <span className="font-bold text-red-400">{formatCurrency(overspendAmount)}</span>.
                   </p>
                 </div>
               </div>
@@ -405,45 +422,45 @@ export default function BudgetDashboard() {
               <div className="flex flex-col md:flex-row gap-8 mb-6">
                 <div>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Statement Should Be</p>
-                  <p className="text-3xl font-black font-mono text-white">{formatCurrency(expectedAmexStatement)}</p>
+                  <p className="text-3xl font-black font-mono text-white">{formatCurrency(expectedPrimaryCardStatement)}</p>
                 </div>
                 <div>
                   <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">My Personal Portion</p>
-                  <p className={`text-3xl font-black font-mono ${groceryOverBudget ? 'text-red-400' : 'text-indigo-400'}`}>{formatCurrency(myAmexPortion)}</p>
+                  <p className={`text-3xl font-black font-mono ${groceryOverBudget ? 'text-red-400' : 'text-indigo-400'}`}>{formatCurrency(myPrimaryCardPortion)}</p>
                 </div>
               </div>
               <div className="border-t border-white/10 pt-4 space-y-2">
                 <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-3">Breakdown</p>
                 <div className="flex justify-between text-xs text-indigo-200">
                   <span>Recurring subscriptions (full)</span>
-                  <span className="font-mono">{formatCurrency(totalAmexRecurringFull)}</span>
+                  <span className="font-mono">{formatCurrency(totalPrimaryCardRecurringFull)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-indigo-200 opacity-60 ml-4 mb-2">
                   <span>↳ My recurring portion</span>
-                  <span className="font-mono">{formatCurrency(totalAmexRecurringMine)}</span>
+                  <span className="font-mono">{formatCurrency(totalPrimaryCardRecurringMine)}</span>
                 </div>
-                {totalAmexExpenses > 0 && (
+                {totalPrimaryCardExpenses > 0 && (
                   <div className="flex justify-between text-xs text-indigo-200 mb-2">
-                    <span>Fixed Card expenses</span>
-                    <span className="font-mono">{formatCurrency(totalAmexExpenses)}</span>
+                    <span>Fixed Primary Card expenses</span>
+                    <span className="font-mono">{formatCurrency(totalPrimaryCardExpenses)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs text-indigo-200">
                   <span>Monthly day-to-day allowance</span>
                   <span className="font-mono">{formatCurrency(effectiveDayToDayBudget)}</span>
                 </div>
-                {totalNonAmex > 0 && (
+                {totalSecondaryCards > 0 && (
                   <div className="flex justify-between text-xs text-rose-300">
-                    <span>Non-Card spend</span>
-                    <span className="font-mono">+{formatCurrency(totalNonAmex)}</span>
+                    <span>Secondary Cards spend</span>
+                    <span className="font-mono">+{formatCurrency(totalSecondaryCards)}</span>
                   </div>
                 )}
                 <div className="flex justify-between text-xs text-indigo-200">
                   <span>Grocery shop total (full)</span>
-                  <span className="font-mono">{formatCurrency(totalAmexGroceryFull)}</span>
+                  <span className="font-mono">{formatCurrency(totalPrimaryCardGroceryFull)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-emerald-300 border-t border-white/10 pt-2">
-                  <span>↳ My day-to-day spend (grocery + non-card)</span>
+                  <span>↳ My day-to-day spend (grocery + secondary cards)</span>
                   <span className="font-mono">{formatCurrency(myDayToDaySpend)} of {formatCurrency(effectiveDayToDayBudget)} limit</span>
                 </div>
               </div>
@@ -851,17 +868,17 @@ function ExpenseList({ data, categories, refresh }) {
 
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
-  const [isAmex, setIsAmex] = useState(false);
+  const [isCreditCard, setIsCreditCard] = useState(false);
   const [categoryId, setCategoryId] = useState('');
 
   const [editingId, setEditingId] = useState(null);
-  const [editForm, setEditForm] = useState({ name: '', amount: '', isAmex: false, categoryId: '' });
+  const [editForm, setEditForm] = useState({ name: '', amount: '', isCreditCard: false, categoryId: '' });
 
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!name || !amount) return;
-    await api.createExpense({ name, amount, isAmex, categoryId });
-    setName(''); setAmount(''); setIsAmex(false); refresh();
+    await api.createExpense({ name, amount, isCreditCard, categoryId });
+    setName(''); setAmount(''); setIsCreditCard(false); refresh();
   };
 
   const handleUpdate = async (e, id) => {
@@ -910,8 +927,8 @@ function ExpenseList({ data, categories, refresh }) {
                             <input value={editForm.name} onChange={ev=>setEditForm({...editForm, name: ev.target.value})} className="flex-1 min-w-[120px] bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="Name" />
                             <input type="number" value={editForm.amount} onChange={ev=>setEditForm({...editForm, amount: ev.target.value})} className="w-16 bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="£" />
                             <label className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-500">
-                              <input type="checkbox" checked={editForm.isAmex} onChange={ev=>setEditForm({...editForm, isAmex: ev.target.checked})} />
-                              Credit Card
+                              <input type="checkbox" checked={editForm.isCreditCard} onChange={ev=>setEditForm({...editForm, isCreditCard: ev.target.checked})} />
+                              Primary Card
                             </label>
                             <select value={editForm.categoryId} onChange={ev=>setEditForm({...editForm, categoryId: ev.target.value})} className="bg-white text-xs px-1 py-1 rounded border border-slate-200 outline-none">
                               <option value="">None</option>
@@ -924,7 +941,7 @@ function ExpenseList({ data, categories, refresh }) {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-bold text-slate-700">{e.name}</span>
-                              {e.isAmex && <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Credit Card</span>}
+                              {(e.isPrimaryCard || e.isCreditCard) && <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Primary Card</span>}
                             </div>
                             {e.category && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{e.category.name}</span>}
                           </div>
@@ -935,7 +952,7 @@ function ExpenseList({ data, categories, refresh }) {
                         <div className="flex items-center gap-4 mt-2 sm:mt-0 pl-6 sm:pl-0 shrink-0">
                           <span className="font-mono font-bold text-slate-800">{formatCurrency(e.amount)}</span>
                           <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity ml-2">
-                            <button onClick={() => { setEditingId(e.id); setEditForm({ name: e.name, amount: e.amount, isAmex: e.isAmex, categoryId: e.categoryId || '' }); }} className="text-slate-300 hover:text-indigo-500 p-1">
+                            <button onClick={() => { setEditingId(e.id); setEditForm({ name: e.name, amount: e.amount, isCreditCard: !!(e.isPrimaryCard || e.isCreditCard), categoryId: e.categoryId || '' }); }} className="text-slate-300 hover:text-indigo-500 p-1">
                               <Pencil size={14} />
                             </button>
                             <button onClick={() => api.deleteExpense(e.id).then(refresh)} className="text-slate-300 hover:text-red-500 p-1">
@@ -958,8 +975,8 @@ function ExpenseList({ data, categories, refresh }) {
         <input placeholder="Expense Name" value={name} onChange={e=>setName(e.target.value)} className="flex-1 min-w-[120px] bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none" />
         <input placeholder="£" type="number" value={amount} onChange={e=>setAmount(e.target.value)} className="w-20 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none" />
         <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500 bg-slate-50 px-2 rounded-lg border border-slate-200 cursor-pointer">
-          <input type="checkbox" checked={isAmex} onChange={e=>setIsAmex(e.target.checked)} />
-          Credit Card
+          <input type="checkbox" checked={isCreditCard} onChange={e=>setIsCreditCard(e.target.checked)} />
+          Primary Card
         </label>
         <select value={categoryId} onChange={e=>setCategoryId(e.target.value)} className="bg-slate-50 text-xs px-2 py-2 rounded-lg border border-slate-200 outline-none">
           <option value="">Category</option>
@@ -971,7 +988,7 @@ function ExpenseList({ data, categories, refresh }) {
   );
 }
 
-function AmexRecurringList({ data, refresh, amexExpenses }) {
+function PrimaryCardRecurringList({ data, refresh, cardExpenses }) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
   const [myPortionAmount, setMyPortionAmount] = useState('');
@@ -979,16 +996,16 @@ function AmexRecurringList({ data, refresh, amexExpenses }) {
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!name || !amount) return;
-    await api.createAmexRecurring({ name, amount, myPortionAmount });
+    await api.createPrimaryCardRecurring({ name, amount, myPortionAmount });
     setName(''); setAmount(''); setMyPortionAmount(''); refresh();
   };
 
   return (
     <div className="space-y-3">
-      {/* Read-only: Amex-flagged monthly expenses */}
-      {amexExpenses?.length > 0 && (
+      {/* Read-only: Primary-card-flagged monthly expenses */}
+      {cardExpenses?.length > 0 && (
         <>
-          {amexExpenses.map(e => (
+          {cardExpenses.map(e => (
             <div key={e.id} className="flex justify-between items-center border-b border-white/5 pb-2 opacity-70">
               <div className="flex items-center gap-2">
                 <span className="text-[8px] font-black uppercase tracking-widest text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded">Expense</span>
@@ -1000,7 +1017,7 @@ function AmexRecurringList({ data, refresh, amexExpenses }) {
           <div className="border-b border-white/10" />
         </>
       )}
-      {/* Editable recurring Amex entries */}
+      {/* Editable recurring primary card entries */}
       {data.map(i => (
         <div key={i.id} className="flex flex-col sm:flex-row sm:items-center justify-between group border-b border-white/5 pb-2 gap-2 min-w-0">
           <span className="text-xs font-bold text-indigo-100 truncate flex-1 pr-2">{i.name}</span>
@@ -1013,7 +1030,7 @@ function AmexRecurringList({ data, refresh, amexExpenses }) {
               <span className="text-[9px] text-emerald-400 font-bold uppercase tracking-widest block mb-0.5">My Portion</span>
               <span className="font-mono text-xs font-bold text-emerald-300">{formatCurrency(i.myPortionAmount ?? i.amount)}</span>
             </div>
-            <button onClick={() => api.deleteAmexRecurring(i.id).then(refresh)} className="text-indigo-400 hover:text-red-400 opacity-0 group-hover:opacity-100 ml-1">
+            <button onClick={() => api.deletePrimaryCardRecurring(i.id).then(refresh)} className="text-indigo-400 hover:text-red-400 opacity-0 group-hover:opacity-100 ml-1">
               <Trash2 size={12} />
             </button>
           </div>
@@ -1029,7 +1046,7 @@ function AmexRecurringList({ data, refresh, amexExpenses }) {
   );
 }
 
-function AmexGroceryList({ data, refresh }) {
+function PrimaryCardGroceryList({ data, refresh }) {
   const [name, setName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
   const [myPortionAmount, setMyPortionAmount] = useState('');
@@ -1039,13 +1056,13 @@ function AmexGroceryList({ data, refresh }) {
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!totalAmount) return;
-    await api.createAmexGrocery({ name: name || 'Shop', totalAmount, myPortionAmount: myPortionAmount || (totalAmount/2) });
+    await api.createPrimaryCardGrocery({ name: name || 'Shop', totalAmount, myPortionAmount: myPortionAmount || (totalAmount/2) });
     setName(''); setTotalAmount(''); setMyPortionAmount(''); refresh();
   };
 
   const handleRename = async (id) => {
     if (!editName.trim()) return;
-    await api.updateAmexGrocery(id, { name: editName });
+    await api.updatePrimaryCardGrocery(id, { name: editName });
     setEditingId(null); setEditName(''); refresh();
   };
 
@@ -1088,7 +1105,7 @@ function AmexGroceryList({ data, refresh }) {
               <span className="text-[8px] text-emerald-400 uppercase block">My Portion</span>
               <span className="font-mono text-xs font-bold text-emerald-400">{formatCurrency(i.myPortionAmount)}</span>
             </div>
-            <button onClick={() => api.deleteAmexGrocery(i.id).then(refresh)} className="text-indigo-400 hover:text-red-400 opacity-0 group-hover:opacity-100">
+            <button onClick={() => api.deletePrimaryCardGrocery(i.id).then(refresh)} className="text-indigo-400 hover:text-red-400 opacity-0 group-hover:opacity-100">
               <Trash2 size={12} />
             </button>
           </div>
@@ -1106,14 +1123,14 @@ function AmexGroceryList({ data, refresh }) {
   );
 }
 
-function NonAmexExpenseList({ data, refresh }) {
+function SecondaryCardExpenseList({ data, refresh }) {
   const [name, setName] = useState('');
   const [amount, setAmount] = useState('');
 
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!name || !amount) return;
-    await api.createNonAmex({ name, amount });
+    await api.createSecondaryCardExpense({ name, amount });
     setName(''); setAmount(''); refresh();
   };
 
@@ -1124,21 +1141,21 @@ function NonAmexExpenseList({ data, refresh }) {
           <span className="text-xs font-bold text-rose-100 truncate flex-1 pr-2">{i.name}</span>
           <div className="flex items-center gap-3 shrink-0">
             <span className="font-mono text-xs font-bold text-white">-{formatCurrency(i.amount)}</span>
-            <button onClick={() => api.deleteNonAmex(i.id).then(refresh)} className="text-rose-400 hover:text-red-400 opacity-0 group-hover:opacity-100">
+            <button onClick={() => api.deleteSecondaryCardExpense(i.id).then(refresh)} className="text-rose-400 hover:text-red-400 opacity-0 group-hover:opacity-100">
               <Trash2 size={12} />
             </button>
           </div>
         </div>
       ))}
       <form onSubmit={handleAdd} className="flex flex-wrap gap-2 pt-2">
-        <input placeholder="Non-Amex spend..." value={name} onChange={e=>setName(e.target.value)} className="flex-1 min-w-[100px] bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-rose-400" />
+        <input placeholder="Secondary card spend..." value={name} onChange={e=>setName(e.target.value)} className="flex-1 min-w-[100px] bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-rose-400" />
         <input placeholder="£" type="number" step="0.01" value={amount} onChange={e=>setAmount(e.target.value)} className="w-16 bg-white/10 text-white placeholder:text-white/30 text-xs px-3 py-2 rounded-lg border border-white/10 outline-none focus:border-rose-400" />
         <button type="submit" className="bg-rose-500 text-white p-2 rounded-lg hover:bg-rose-600"><Plus size={14} /></button>
       </form>
     </div>
   );
 }
-function AmexStatementCalculator() {
+function SharedCreditCardStatementCalculator() {
   const [liveShops, setLiveShops] = useState([]);
   const [livePartnerStatement, setLivePartnerStatement] = useState(0);
   const [exportsList, setExportsList] = useState([]);
@@ -1148,8 +1165,8 @@ function AmexStatementCalculator() {
 
   // Dynamic names & family state
   const [familyMembers, setFamilyMembers] = useState([]);
-  const [primaryName, setPrimaryName] = useState('Sam');
-  const [partnerName, setPartnerName] = useState('Lauren');
+  const [primaryName, setPrimaryName] = useState('Me');
+  const [partnerName, setPartnerName] = useState('Partner');
   const [cardDisplayName, setCardDisplayName] = useState(null);
   const [cardholderName, setCardholderName] = useState(null);
 
@@ -1296,7 +1313,7 @@ function AmexStatementCalculator() {
   const handleAdd = async (e) => {
     e.preventDefault();
     if (!vendorName || !totalAmount || !payerCoveredAmount) return;
-    await api.createSharedAmexShop({
+    await api.createSharedShop({
       vendorName,
       totalAmount,
       payerName: payerName || primaryName,
@@ -1708,7 +1725,7 @@ function AmexStatementCalculator() {
                 </div>
                 {!isReadOnly && (
                   <button 
-                    onClick={() => api.deleteSharedAmexShop(shop.id).then(fetchData)} 
+                    onClick={() => api.deleteSharedShop(shop.id).then(fetchData)} 
                     className="text-slate-400 hover:text-red-400 sm:opacity-0 group-hover:opacity-100 transition-opacity p-1.5 rounded-lg hover:bg-white/10"
                     title="Delete shop"
                   >

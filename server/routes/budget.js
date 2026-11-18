@@ -16,9 +16,9 @@ router.get('/all', async (req, res) => {
       categories,
       sharedBills,
       expenses,
-      amexRecurring,
-      amexGrocery,
-      nonAmexExpenses,
+      primaryCardRecurring,
+      primaryCardGrocery,
+      secondaryCardExpenses,
       user
     ] = await Promise.all([
       prisma.budgetIncome.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
@@ -33,13 +33,34 @@ router.get('/all', async (req, res) => {
         include: { category: true },
         orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }]
       }),
-      prisma.amexRecurring.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
-      prisma.amexGroceryShop.findMany({ where: { ownerId: userId }, orderBy: { date: 'desc' } }),
-      prisma.nonAmexExpense.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
-      prisma.user.findUnique({ where: { id: userId }, select: { amexAllowance: true } })
+      prisma.primaryCardRecurring.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.primaryCardGroceryShop.findMany({ where: { ownerId: userId }, orderBy: { date: 'desc' } }),
+      prisma.secondaryCardExpense.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.user.findUnique({ where: { id: userId }, select: { primaryCardAllowance: true } })
     ])
 
-    res.json({ incomes, categories, sharedBills, expenses, amexRecurring, amexGrocery, nonAmexExpenses, amexAllowance: user?.amexAllowance || 0 })
+    const formattedExpenses = expenses.map(e => ({
+      ...e,
+      isPrimaryCard: !!e.isPrimaryCard,
+      isCreditCard: !!e.isPrimaryCard
+    }))
+
+    res.json({ 
+      incomes, 
+      categories, 
+      sharedBills, 
+      expenses: formattedExpenses, 
+      primaryCardRecurring,
+      primaryCardGrocery,
+      secondaryCardExpenses,
+      secondaryCards: secondaryCardExpenses,
+      primaryCardAllowance: user?.primaryCardAllowance || 0,
+      // Compatibility aliases
+      cardRecurring: primaryCardRecurring,
+      cardGrocery: primaryCardGrocery,
+      nonCardExpenses: secondaryCardExpenses,
+      cardAllowance: user?.primaryCardAllowance || 0
+    })
   } catch (err) {
     console.error('[GET /budget]', err)
     res.status(500).json({ error: 'Internal server error' })
@@ -48,19 +69,25 @@ router.get('/all', async (req, res) => {
 
 // ── ALLOWANCE ─────────────────────────────────────────────────────────────────
 
-router.put('/allowance', async (req, res) => {
+const handleAllowanceUpdate = async (req, res) => {
   try {
     const { amount } = req.body
     const user = await prisma.user.update({
       where: { id: req.user.userId },
-      data: { amexAllowance: Number(amount) || 0 },
-      select: { amexAllowance: true }
+      data: { primaryCardAllowance: Number(amount) || 0 },
+      select: { primaryCardAllowance: true }
     })
-    res.json(user)
+    res.json({
+      ...user,
+      primaryCardAllowance: user.primaryCardAllowance,
+      cardAllowance: user.primaryCardAllowance
+    })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.put('/allowance', handleAllowanceUpdate)
+router.put('/primary-card/allowance', handleAllowanceUpdate)
 
 // ── INCOMES ───────────────────────────────────────────────────────────────────
 
@@ -82,7 +109,11 @@ router.put('/incomes/:id', async (req, res) => {
     const { name, amount, isSalary } = req.body
     const item = await prisma.budgetIncome.update({
       where: { id: req.params.id, ownerId: req.user.userId },
-      data: { name, amount: Number(amount) || 0, isSalary: !!isSalary }
+      data: { 
+        ...(name !== undefined && { name }), 
+        ...(amount !== undefined && { amount: Number(amount) }), 
+        ...(isSalary !== undefined && { isSalary: !!isSalary }) 
+      }
     })
     res.json(item)
   } catch (err) {
@@ -92,7 +123,9 @@ router.put('/incomes/:id', async (req, res) => {
 
 router.delete('/incomes/:id', async (req, res) => {
   try {
-    await prisma.budgetIncome.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
+    await prisma.budgetIncome.delete({
+      where: { id: req.params.id, ownerId: req.user.userId }
+    })
     res.json({ message: 'Deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
@@ -106,7 +139,7 @@ router.post('/categories', async (req, res) => {
     const { name, color } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
     const item = await prisma.budgetCategory.create({
-      data: { name, color: color || '#3b82f6', ownerId: req.user.userId }
+      data: { name, color: color || '#6366f1', ownerId: req.user.userId }
     })
     res.status(201).json(item)
   } catch (err) {
@@ -119,7 +152,10 @@ router.put('/categories/:id', async (req, res) => {
     const { name, color } = req.body
     const item = await prisma.budgetCategory.update({
       where: { id: req.params.id, ownerId: req.user.userId },
-      data: { name, color }
+      data: { 
+        ...(name !== undefined && { name }), 
+        ...(color !== undefined && { color }) 
+      }
     })
     res.json(item)
   } catch (err) {
@@ -129,7 +165,9 @@ router.put('/categories/:id', async (req, res) => {
 
 router.delete('/categories/:id', async (req, res) => {
   try {
-    await prisma.budgetCategory.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
+    await prisma.budgetCategory.delete({
+      where: { id: req.params.id, ownerId: req.user.userId }
+    })
     res.json({ message: 'Deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
@@ -140,14 +178,24 @@ router.delete('/categories/:id', async (req, res) => {
 
 router.post('/shared-bills', async (req, res) => {
   try {
-    const { name, amount, myShare, categoryId } = req.body
+    const { name, amount, myPortion, paidBy, categoryId } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
+    
+    // Find highest sort order
+    const last = await prisma.budgetSharedBill.findFirst({
+      where: { ownerId: req.user.userId },
+      orderBy: { sortOrder: 'desc' }
+    })
+    const sortOrder = (last?.sortOrder ?? -1) + 1
+
     const item = await prisma.budgetSharedBill.create({
       data: { 
         name, 
         amount: Number(amount) || 0, 
-        myShare: Number(myShare) ?? 0.5, 
+        myPortion: Number(myPortion) || 0, 
+        paidBy: paidBy || 'Me', 
         categoryId: categoryId || null,
+        sortOrder,
         ownerId: req.user.userId 
       },
       include: { category: true }
@@ -160,14 +208,16 @@ router.post('/shared-bills', async (req, res) => {
 
 router.put('/shared-bills/:id', async (req, res) => {
   try {
-    const { name, amount, myShare, categoryId } = req.body
+    const { name, amount, myPortion, paidBy, categoryId, sortOrder } = req.body
     const item = await prisma.budgetSharedBill.update({
       where: { id: req.params.id, ownerId: req.user.userId },
       data: { 
-        name, 
-        amount: Number(amount) || 0, 
-        myShare: Number(myShare) ?? 0.5, 
-        categoryId: categoryId || null 
+        ...(name !== undefined && { name }), 
+        ...(amount !== undefined && { amount: Number(amount) }), 
+        ...(myPortion !== undefined && { myPortion: Number(myPortion) }), 
+        ...(paidBy !== undefined && { paidBy }), 
+        ...(categoryId !== undefined && { categoryId: categoryId || null }),
+        ...(sortOrder !== undefined && { sortOrder: Number(sortOrder) })
       },
       include: { category: true }
     })
@@ -179,7 +229,9 @@ router.put('/shared-bills/:id', async (req, res) => {
 
 router.delete('/shared-bills/:id', async (req, res) => {
   try {
-    await prisma.budgetSharedBill.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
+    await prisma.budgetSharedBill.delete({
+      where: { id: req.params.id, ownerId: req.user.userId }
+    })
     res.json({ message: 'Deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
@@ -188,14 +240,16 @@ router.delete('/shared-bills/:id', async (req, res) => {
 
 router.put('/shared-bills/reorder/batch', async (req, res) => {
   try {
-    const { items } = req.body // array of { id, sortOrder }
-    const updates = items.map(item => 
-      prisma.budgetSharedBill.update({
-        where: { id: item.id, ownerId: req.user.userId },
-        data: { sortOrder: item.sortOrder }
-      })
+    const { items } = req.body // [{ id, sortOrder }]
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'Invalid items array' })
+    await Promise.all(
+      items.map(item =>
+        prisma.budgetSharedBill.update({
+          where: { id: item.id, ownerId: req.user.userId },
+          data: { sortOrder: item.sortOrder }
+        })
+      )
     )
-    await prisma.$transaction(updates)
     res.json({ message: 'Reordered' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
@@ -206,19 +260,24 @@ router.put('/shared-bills/reorder/batch', async (req, res) => {
 
 router.post('/expenses', async (req, res) => {
   try {
-    const { name, amount, isAmex, categoryId } = req.body
+    const { name, amount, isPrimaryCard, isCreditCard, categoryId } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
+    const primaryCardFlag = isPrimaryCard !== undefined ? !!isPrimaryCard : !!isCreditCard
     const item = await prisma.budgetExpense.create({
       data: { 
         name, 
         amount: Number(amount) || 0, 
-        isAmex: !!isAmex, 
+        isPrimaryCard: primaryCardFlag, 
         categoryId: categoryId || null,
         ownerId: req.user.userId 
       },
       include: { category: true }
     })
-    res.status(201).json(item)
+    res.status(201).json({
+      ...item,
+      isPrimaryCard: item.isPrimaryCard,
+      isCreditCard: item.isPrimaryCard
+    })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
@@ -226,18 +285,23 @@ router.post('/expenses', async (req, res) => {
 
 router.put('/expenses/:id', async (req, res) => {
   try {
-    const { name, amount, isAmex, categoryId } = req.body
+    const { name, amount, isPrimaryCard, isCreditCard, categoryId } = req.body
+    const primaryCardFlag = isPrimaryCard !== undefined ? !!isPrimaryCard : (isCreditCard !== undefined ? !!isCreditCard : undefined)
     const item = await prisma.budgetExpense.update({
       where: { id: req.params.id, ownerId: req.user.userId },
       data: { 
         name, 
         amount: Number(amount) || 0, 
-        isAmex: !!isAmex, 
+        ...(primaryCardFlag !== undefined && { isPrimaryCard: primaryCardFlag }), 
         categoryId: categoryId || null 
       },
       include: { category: true }
     })
-    res.json(item)
+    res.json({
+      ...item,
+      isPrimaryCard: item.isPrimaryCard,
+      isCreditCard: item.isPrimaryCard
+    })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
@@ -245,7 +309,9 @@ router.put('/expenses/:id', async (req, res) => {
 
 router.delete('/expenses/:id', async (req, res) => {
   try {
-    await prisma.budgetExpense.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
+    await prisma.budgetExpense.delete({
+      where: { id: req.params.id, ownerId: req.user.userId }
+    })
     res.json({ message: 'Deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
@@ -254,27 +320,29 @@ router.delete('/expenses/:id', async (req, res) => {
 
 router.put('/expenses/reorder/batch', async (req, res) => {
   try {
-    const { items } = req.body // array of { id, sortOrder }
-    const updates = items.map(item => 
-      prisma.budgetExpense.update({
-        where: { id: item.id, ownerId: req.user.userId },
-        data: { sortOrder: item.sortOrder }
-      })
+    const { items } = req.body
+    if (!Array.isArray(items)) return res.status(400).json({ error: 'Invalid items array' })
+    await Promise.all(
+      items.map(item =>
+        prisma.budgetExpense.update({
+          where: { id: item.id, ownerId: req.user.userId },
+          data: { sortOrder: item.sortOrder }
+        })
+      )
     )
-    await prisma.$transaction(updates)
     res.json({ message: 'Reordered' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
 })
 
-// ── AMEX RECURRING ────────────────────────────────────────────────────────────
+// ── PRIMARY CARD RECURRING ────────────────────────────────────────────────────
 
-router.post('/amex/recurring', async (req, res) => {
+const createPrimaryRecurringHandler = async (req, res) => {
   try {
     const { name, amount, myPortionAmount } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
-    const item = await prisma.amexRecurring.create({
+    const item = await prisma.primaryCardRecurring.create({
       data: { 
         name, 
         amount: Number(amount) || 0, 
@@ -286,12 +354,14 @@ router.post('/amex/recurring', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.post('/primary-card/recurring', createPrimaryRecurringHandler)
+router.post('/card/recurring', createPrimaryRecurringHandler)
 
-router.put('/amex/recurring/:id', async (req, res) => {
+const updatePrimaryRecurringHandler = async (req, res) => {
   try {
     const { name, amount, myPortionAmount } = req.body
-    const item = await prisma.amexRecurring.update({
+    const item = await prisma.primaryCardRecurring.update({
       where: { id: req.params.id, ownerId: req.user.userId },
       data: { 
         ...(name !== undefined && { name }),
@@ -303,23 +373,27 @@ router.put('/amex/recurring/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.put('/primary-card/recurring/:id', updatePrimaryRecurringHandler)
+router.put('/card/recurring/:id', updatePrimaryRecurringHandler)
 
-router.delete('/amex/recurring/:id', async (req, res) => {
+const deletePrimaryRecurringHandler = async (req, res) => {
   try {
-    await prisma.amexRecurring.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
+    await prisma.primaryCardRecurring.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
     res.json({ message: 'Deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.delete('/primary-card/recurring/:id', deletePrimaryRecurringHandler)
+router.delete('/card/recurring/:id', deletePrimaryRecurringHandler)
 
-// ── AMEX GROCERY ──────────────────────────────────────────────────────────────
+// ── PRIMARY CARD GROCERY ──────────────────────────────────────────────────────
 
-router.post('/amex/grocery', async (req, res) => {
+const createPrimaryGroceryHandler = async (req, res) => {
   try {
     const { name, date, totalAmount, myPortionAmount } = req.body
-    const item = await prisma.amexGroceryShop.create({
+    const item = await prisma.primaryCardGroceryShop.create({
       data: { 
         name: name || 'Shop',
         date: date ? new Date(date) : new Date(), 
@@ -332,12 +406,14 @@ router.post('/amex/grocery', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.post('/primary-card/grocery', createPrimaryGroceryHandler)
+router.post('/card/grocery', createPrimaryGroceryHandler)
 
-router.put('/amex/grocery/:id', async (req, res) => {
+const updatePrimaryGroceryHandler = async (req, res) => {
   try {
     const { name, date, totalAmount, myPortionAmount } = req.body
-    const item = await prisma.amexGroceryShop.update({
+    const item = await prisma.primaryCardGroceryShop.update({
       where: { id: req.params.id, ownerId: req.user.userId },
       data: { 
         ...(name !== undefined && { name }),
@@ -350,45 +426,53 @@ router.put('/amex/grocery/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.put('/primary-card/grocery/:id', updatePrimaryGroceryHandler)
+router.put('/card/grocery/:id', updatePrimaryGroceryHandler)
 
-router.delete('/amex/grocery', async (req, res) => {
+const clearPrimaryGroceryHandler = async (req, res) => {
   try {
-    await prisma.amexGroceryShop.deleteMany({ where: { ownerId: req.user.userId } })
+    await prisma.primaryCardGroceryShop.deleteMany({ where: { ownerId: req.user.userId } })
     res.json({ message: 'All deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.delete('/primary-card/grocery', clearPrimaryGroceryHandler)
+router.delete('/card/grocery', clearPrimaryGroceryHandler)
 
-router.delete('/amex/grocery/:id', async (req, res) => {
+const deleteOnePrimaryGroceryHandler = async (req, res) => {
   try {
-    await prisma.amexGroceryShop.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
+    await prisma.primaryCardGroceryShop.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
     res.json({ message: 'Deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.delete('/primary-card/grocery/:id', deleteOnePrimaryGroceryHandler)
+router.delete('/card/grocery/:id', deleteOnePrimaryGroceryHandler)
 
-// ── NON-AMEX EXPENSES ─────────────────────────────────────────────────────────
+// ── SECONDARY CARDS EXPENSES ──────────────────────────────────────────────────
 
-router.post('/non-amex', async (req, res) => {
+const createSecondaryCardHandler = async (req, res) => {
   try {
     const { name, amount } = req.body
     if (!name) return res.status(400).json({ error: 'Name is required' })
-    const item = await prisma.nonAmexExpense.create({
+    const item = await prisma.secondaryCardExpense.create({
       data: { name, amount: Number(amount) || 0, ownerId: req.user.userId }
     })
     res.status(201).json(item)
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.post('/secondary-cards', createSecondaryCardHandler)
+router.post('/non-card', createSecondaryCardHandler)
 
-router.put('/non-amex/:id', async (req, res) => {
+const updateSecondaryCardHandler = async (req, res) => {
   try {
     const { name, amount } = req.body
-    const item = await prisma.nonAmexExpense.update({
+    const item = await prisma.secondaryCardExpense.update({
       where: { id: req.params.id, ownerId: req.user.userId },
       data: { 
         ...(name !== undefined && { name }),
@@ -399,42 +483,48 @@ router.put('/non-amex/:id', async (req, res) => {
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.put('/secondary-cards/:id', updateSecondaryCardHandler)
+router.put('/non-card/:id', updateSecondaryCardHandler)
 
-router.delete('/non-amex', async (req, res) => {
+const clearSecondaryCardsHandler = async (req, res) => {
   try {
-    await prisma.nonAmexExpense.deleteMany({ where: { ownerId: req.user.userId } })
+    await prisma.secondaryCardExpense.deleteMany({ where: { ownerId: req.user.userId } })
     res.json({ message: 'All deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.delete('/secondary-cards', clearSecondaryCardsHandler)
+router.delete('/non-card', clearSecondaryCardsHandler)
 
-router.delete('/non-amex/:id', async (req, res) => {
+const deleteOneSecondaryCardHandler = async (req, res) => {
   try {
-    await prisma.nonAmexExpense.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
+    await prisma.secondaryCardExpense.delete({ where: { id: req.params.id, ownerId: req.user.userId } })
     res.json({ message: 'Deleted' })
   } catch (err) {
     res.status(500).json({ error: 'Server error' })
   }
-})
+}
+router.delete('/secondary-cards/:id', deleteOneSecondaryCardHandler)
+router.delete('/non-card/:id', deleteOneSecondaryCardHandler)
 
-// ── SHARED CREDIT CARD CALCULATOR ──────────────────────────────────────────────
+// ── SHARED STATEMENT CALCULATOR ───────────────────────────────────────────────
 
 router.get('/calculator/state', async (req, res) => {
   try {
     const familyId = req.user.familyId
-    const shops = await prisma.sharedAmexFoodShop.findMany({
+    const shops = await prisma.sharedFoodShop.findMany({
       where: familyId ? { familyId } : {},
       orderBy: { date: 'asc' }
     })
-    let state = familyId ? await prisma.sharedAmexState.findUnique({ where: { familyId } }) : null
+    let state = familyId ? await prisma.sharedStatementState.findUnique({ where: { familyId } }) : null
     if (!state && familyId) {
-      state = await prisma.sharedAmexState.create({
+      state = await prisma.sharedStatementState.create({
         data: { familyId, partnerStatementAmount: 0 }
       })
     } else if (!state) {
-      state = await prisma.sharedAmexState.findFirst()
+      state = await prisma.sharedStatementState.findFirst()
     }
 
     // Resolve family members
@@ -466,8 +556,8 @@ router.get('/calculator/state', async (req, res) => {
 
     // Retrieve card configuration metadata if connected
     const config = familyId
-      ? await prisma.amexAutomationConfig.findUnique({ where: { familyId } })
-      : await prisma.amexAutomationConfig.findFirst()
+      ? await prisma.cardAutomationConfig.findUnique({ where: { familyId } })
+      : await prisma.cardAutomationConfig.findFirst()
 
     res.json({
       shops,
@@ -488,7 +578,7 @@ router.post('/calculator/shops', async (req, res) => {
   try {
     const { vendorName, date, totalAmount, payerName, payerCoveredAmount } = req.body
     if (!vendorName) return res.status(400).json({ error: 'Vendor name is required' })
-    const item = await prisma.sharedAmexFoodShop.create({
+    const item = await prisma.sharedFoodShop.create({
       data: {
         vendorName,
         date: date ? new Date(date) : new Date(),
@@ -511,7 +601,7 @@ router.delete('/calculator/shops/:id', async (req, res) => {
     if (req.user.familyId) {
       where.familyId = req.user.familyId
     }
-    await prisma.sharedAmexFoodShop.delete({ where })
+    await prisma.sharedFoodShop.delete({ where })
     res.json({ message: 'Deleted' })
   } catch (err) {
     console.error('[Delete Shop Error]', err)
@@ -522,17 +612,17 @@ router.delete('/calculator/shops/:id', async (req, res) => {
 router.delete('/calculator/shops', async (req, res) => {
   try {
     const familyId = req.user.familyId
-    await prisma.sharedAmexFoodShop.deleteMany({
+    await prisma.sharedFoodShop.deleteMany({
       where: familyId ? { familyId } : {}
     })
     if (familyId) {
-      await prisma.sharedAmexState.upsert({
+      await prisma.sharedStatementState.upsert({
         where: { familyId },
         update: { partnerStatementAmount: 0 },
         create: { familyId, partnerStatementAmount: 0 }
       })
     } else {
-      await prisma.sharedAmexState.upsert({
+      await prisma.sharedStatementState.upsert({
         where: { id: 'singleton' },
         update: { partnerStatementAmount: 0 },
         create: { id: 'singleton', partnerStatementAmount: 0 }
@@ -551,13 +641,13 @@ router.put('/calculator/statement', async (req, res) => {
     const familyId = req.user.familyId
     let state
     if (familyId) {
-      state = await prisma.sharedAmexState.upsert({
+      state = await prisma.sharedStatementState.upsert({
         where: { familyId },
         update: { partnerStatementAmount: Number(amount) || 0 },
         create: { familyId, partnerStatementAmount: Number(amount) || 0 }
       })
     } else {
-      state = await prisma.sharedAmexState.upsert({
+      state = await prisma.sharedStatementState.upsert({
         where: { id: 'singleton' },
         update: { partnerStatementAmount: Number(amount) || 0 },
         create: { id: 'singleton', partnerStatementAmount: Number(amount) || 0 }
@@ -583,7 +673,7 @@ router.get('/calculator/next-export-name', async (req, res) => {
 router.get('/calculator/exports', async (req, res) => {
   try {
     const familyId = req.user.familyId
-    const exports = await prisma.sharedAmexExport.findMany({
+    const exports = await prisma.sharedStatementExport.findMany({
       where: familyId ? { familyId } : {},
       orderBy: { createdAt: 'desc' }
     })
@@ -601,7 +691,7 @@ router.post('/calculator/exports', async (req, res) => {
     if (!name) {
       name = await getUniqueExportName(new Date(), familyId)
     } else {
-      const existing = await prisma.sharedAmexExport.findFirst({
+      const existing = await prisma.sharedStatementExport.findFirst({
         where: {
           name,
           ...(familyId ? { familyId } : {})
@@ -612,18 +702,18 @@ router.post('/calculator/exports', async (req, res) => {
       }
     }
 
-    const shops = await prisma.sharedAmexFoodShop.findMany({
+    const shops = await prisma.sharedFoodShop.findMany({
       where: familyId ? { familyId } : {},
       orderBy: { date: 'asc' }
     })
     const state = familyId
-      ? await prisma.sharedAmexState.findUnique({ where: { familyId } })
-      : await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
+      ? await prisma.sharedStatementState.findUnique({ where: { familyId } })
+      : await prisma.sharedStatementState.findUnique({ where: { id: 'singleton' } })
     const partnerStatementAmount = state?.partnerStatementAmount || 0
 
     const { primaryName, partnerName } = await resolveFamilyNames(familyId)
 
-    const newExport = await prisma.sharedAmexExport.create({
+    const newExport = await prisma.sharedStatementExport.create({
       data: {
         name,
         partnerStatementAmount,
@@ -645,8 +735,8 @@ router.post('/calculator/settle', async (req, res) => {
     const familyId = req.user.familyId
     const { partnerStatementAmount, name } = req.body
     const state = familyId
-      ? await prisma.sharedAmexState.findUnique({ where: { familyId } })
-      : await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
+      ? await prisma.sharedStatementState.findUnique({ where: { familyId } })
+      : await prisma.sharedStatementState.findUnique({ where: { id: 'singleton' } })
     const finalPartnerStatement = partnerStatementAmount !== undefined 
       ? Number(partnerStatementAmount) 
       : (state?.partnerStatementAmount || 0)

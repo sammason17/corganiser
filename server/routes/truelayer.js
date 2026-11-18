@@ -51,10 +51,10 @@ router.get('/status', requireAuth, async (req, res) => {
     const familyId = req.user.familyId
     let config = null
     if (familyId) {
-      config = await prisma.amexAutomationConfig.findUnique({ where: { familyId } })
+      config = await prisma.cardAutomationConfig.findUnique({ where: { familyId } })
     }
     if (!config) {
-      config = await prisma.amexAutomationConfig.findFirst({ where: familyId ? { familyId } : {} })
+      config = await prisma.cardAutomationConfig.findFirst({ where: familyId ? { familyId } : {} })
     }
     if (!config) {
       return res.json({
@@ -168,7 +168,7 @@ router.all('/callback', async (req, res) => {
     }
 
     if (targetFamilyId) {
-      await prisma.amexAutomationConfig.upsert({
+      await prisma.cardAutomationConfig.upsert({
         where: { familyId: targetFamilyId },
         update: configData,
         create: {
@@ -177,7 +177,7 @@ router.all('/callback', async (req, res) => {
         }
       })
     } else {
-      await prisma.amexAutomationConfig.upsert({
+      await prisma.cardAutomationConfig.upsert({
         where: { id: 'singleton' },
         update: configData,
         create: {
@@ -221,7 +221,7 @@ router.get('/cards', requireAuth, async (req, res) => {
     // Auto-backfill cardholderName and cardDisplayName if missing
     const activeCard = cards.find(c => c.account_id === targetCardId) || cards[0]
     if (activeCard && (!config.cardholderName || !config.cardDisplayName)) {
-      await prisma.amexAutomationConfig.update({
+      await prisma.cardAutomationConfig.update({
         where: { id: config.id },
         data: {
           cardholderName: activeCard.name_on_card || config.cardholderName,
@@ -274,13 +274,13 @@ router.post('/config', requireAuth, async (req, res) => {
 
     let updated
     if (familyId) {
-      updated = await prisma.amexAutomationConfig.upsert({
+      updated = await prisma.cardAutomationConfig.upsert({
         where: { familyId },
         update: updateData,
         create: { familyId, ...updateData }
       })
     } else {
-      updated = await prisma.amexAutomationConfig.upsert({
+      updated = await prisma.cardAutomationConfig.upsert({
         where: { id: 'singleton' },
         update: updateData,
         create: { id: 'singleton', ...updateData }
@@ -317,7 +317,7 @@ router.post('/disconnect', requireAuth, async (req, res) => {
   try {
     const familyId = req.user.familyId
     if (familyId) {
-      await prisma.amexAutomationConfig.updateMany({
+      await prisma.cardAutomationConfig.updateMany({
         where: { familyId },
         data: {
           accessToken: null,
@@ -330,7 +330,7 @@ router.post('/disconnect', requireAuth, async (req, res) => {
         }
       })
     } else {
-      await prisma.amexAutomationConfig.upsert({
+      await prisma.cardAutomationConfig.upsert({
         where: { id: 'singleton' },
         update: {
           accessToken: null,

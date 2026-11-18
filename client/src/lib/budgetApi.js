@@ -69,72 +69,85 @@ export async function reorderExpenses(items) {
   return data
 }
 
-// Amex Recurring
-export async function createAmexRecurring(payload) {
-  const { data } = await api.post('/budget/amex/recurring', payload)
+// Primary Card Recurring
+export async function createPrimaryCardRecurring(payload) {
+  const { data } = await api.post('/budget/primary-card/recurring', payload)
   return data
 }
-export async function updateAmexRecurring(id, payload) {
-  const { data } = await api.put(`/budget/amex/recurring/${id}`, payload)
+export async function updatePrimaryCardRecurring(id, payload) {
+  const { data } = await api.put(`/budget/primary-card/recurring/${id}`, payload)
   return data
 }
-export async function deleteAmexRecurring(id) {
-  const { data } = await api.delete(`/budget/amex/recurring/${id}`)
+export async function deletePrimaryCardRecurring(id) {
+  const { data } = await api.delete(`/budget/primary-card/recurring/${id}`)
   return data
 }
+export const createCardRecurring = createPrimaryCardRecurring
+export const updateCardRecurring = updatePrimaryCardRecurring
+export const deleteCardRecurring = deletePrimaryCardRecurring
 
-// Amex Grocery
-export async function createAmexGrocery(payload) {
-  const { data } = await api.post('/budget/amex/grocery', payload)
+// Primary Card Grocery
+export async function createPrimaryCardGrocery(payload) {
+  const { data } = await api.post('/budget/primary-card/grocery', payload)
   return data
 }
-export async function updateAmexGrocery(id, payload) {
-  const { data } = await api.put(`/budget/amex/grocery/${id}`, payload)
+export async function updatePrimaryCardGrocery(id, payload) {
+  const { data } = await api.put(`/budget/primary-card/grocery/${id}`, payload)
   return data
 }
-export async function deleteAmexGrocery(id) {
-  const { data } = await api.delete(`/budget/amex/grocery/${id}`)
+export async function deletePrimaryCardGrocery(id) {
+  const { data } = await api.delete(`/budget/primary-card/grocery/${id}`)
   return data
 }
-export async function clearAmexGrocery() {
-  const { data } = await api.delete('/budget/amex/grocery')
+export async function clearPrimaryCardGrocery() {
+  const { data } = await api.delete('/budget/primary-card/grocery')
   return data
 }
+export const createCardGrocery = createPrimaryCardGrocery
+export const updateCardGrocery = updatePrimaryCardGrocery
+export const deleteCardGrocery = deletePrimaryCardGrocery
+export const clearCardGrocery = clearPrimaryCardGrocery
 
-// Non-Amex Expenses
-export async function createNonAmex(payload) {
-  const { data } = await api.post('/budget/non-amex', payload)
+// Secondary Cards Expenses
+export async function createSecondaryCardExpense(payload) {
+  const { data } = await api.post('/budget/secondary-cards', payload)
   return data
 }
-export async function updateNonAmex(id, payload) {
-  const { data } = await api.put(`/budget/non-amex/${id}`, payload)
+export async function updateSecondaryCardExpense(id, payload) {
+  const { data } = await api.put(`/budget/secondary-cards/${id}`, payload)
   return data
 }
-export async function deleteNonAmex(id) {
-  const { data } = await api.delete(`/budget/non-amex/${id}`)
+export async function deleteSecondaryCardExpense(id) {
+  const { data } = await api.delete(`/budget/secondary-cards/${id}`)
   return data
 }
-export async function clearNonAmex() {
-  const { data } = await api.delete('/budget/non-amex')
+export async function clearSecondaryCardExpenses() {
+  const { data } = await api.delete('/budget/secondary-cards')
   return data
 }
+export const createNonCard = createSecondaryCardExpense
+export const updateNonCard = updateSecondaryCardExpense
+export const deleteNonCard = deleteSecondaryCardExpense
+export const clearNonCard = clearSecondaryCardExpenses
 
-// Allowance
-export async function updateAmexAllowance(amount) {
-  const { data } = await api.put('/budget/allowance', { amount })
+// Primary Card Allowance
+export async function updatePrimaryCardAllowance(amount) {
+  const { data } = await api.put('/budget/primary-card/allowance', { amount })
   return data
 }
+export const updateCardAllowance = updatePrimaryCardAllowance
+export const updateAllowance = updatePrimaryCardAllowance
 
-// ── Shared Amex Calculator ──────────────────────────────────────────────────
+// ── Shared Credit Card Calculator ───────────────────────────────────────────
 export async function getCalculatorState() {
   const { data } = await api.get('/budget/calculator/state')
   return data
 }
-export async function createSharedAmexShop(payload) {
+export async function createSharedShop(payload) {
   const { data } = await api.post('/budget/calculator/shops', payload)
   return data
 }
-export async function deleteSharedAmexShop(id) {
+export async function deleteSharedShop(id) {
   const { data } = await api.delete(`/budget/calculator/shops/${id}`)
   return data
 }
