@@ -65,6 +65,9 @@ model Task {
   ownerId String @map("owner_id")
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
 
+  familyId String? @map("family_id")
+  family   Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
+
   categories  TaskCategory[]
   updates     TaskUpdate[]
   timeLogs    TimeLog[]
@@ -83,6 +86,9 @@ model Category {
 
   ownerId String @map("owner_id")
   owner   User   @relation(fields: [ownerId], references: [id], onDelete: Cascade)
+
+  familyId String? @map("family_id")
+  family   Family? @relation(fields: [familyId], references: [id], onDelete: SetNull)
 
   parentId String?    @map("parent_id")
   parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
@@ -428,6 +434,8 @@ model Family {
   exports          SharedAmexExport[]
   state            SharedAmexState?
   automationConfig AmexAutomationConfig?
+  tasks            Task[]
+  categories       Category[]
 
   @@map("families")
 }

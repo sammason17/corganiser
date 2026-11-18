@@ -60,17 +60,52 @@ const taskInclude = {
   _count: { select: { updates: true, timeLogs: true } },
 }
 
-async function getAccessibleTask(id, userId) {
+function getAccessibleTaskFilter(userId, familyId) {
+  if (familyId) {
+    return {
+      OR: [
+        { ownerId: userId },
+        {
+          isShared: true,
+          OR: [
+            { familyId },
+            { owner: { familyMemberships: { some: { familyId } } } }
+          ]
+        }
+      ]
+    }
+  }
+  return { ownerId: userId }
+}
+
+function getAccessibleCategoryFilter(userId, familyId) {
+  if (familyId) {
+    return {
+      OR: [
+        { ownerId: userId },
+        {
+          isShared: true,
+          OR: [
+            { familyId },
+            { owner: { familyMemberships: { some: { familyId } } } }
+          ]
+        }
+      ]
+    }
+  }
+  return { ownerId: userId }
+}
+
+async function getAccessibleTask(id, userId, familyId) {
   return prisma.task.findFirst({
-    where: { id, OR: [{ ownerId: userId }, { isShared: true }] },
+    where: { id, ...getAccessibleTaskFilter(userId, familyId) },
     include: taskInclude,
   })
 }
 
-
-async function getAccessibleCategory(id, userId) {
+async function getAccessibleCategory(id, userId, familyId) {
   return prisma.category.findFirst({
-    where: { id, OR: [{ ownerId: userId }, { isShared: true }] },
+    where: { id, ...getAccessibleCategoryFilter(userId, familyId) },
     include: {
       owner: { select: { id: true, name: true } },
       _count: { select: { tasks: true } },
@@ -271,8 +306,11 @@ app.get('/api/tasks', requireAuth, async (req, res) => {
   try {
     const { status, priority, categoryId, shared } = req.query
     const userId = req.user.userId
+    const familyId = req.user.familyId
+    const baseAccess = getAccessibleTaskFilter(userId, familyId)
+
     const where = {
-      OR: [{ ownerId: userId }, { isShared: true }],
+      ...baseAccess,
       ...(status && { status }),
       ...(priority && { priority }),
       ...(categoryId && { categories: { some: { category: { OR: [{ id: categoryId }, { parentId: categoryId }] } } } }),
@@ -302,6 +340,7 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
         priority: priority || 'MEDIUM',
         dueDate: dueDate ? new Date(dueDate) : null,
         isShared: isShared ?? false,
+        familyId: req.user.familyId || null,
         ownerId: req.user.userId,
         categories: categoryIds?.length ? { create: categoryIds.map(categoryId => ({ categoryId })) } : undefined,
       },
@@ -316,7 +355,7 @@ app.post('/api/tasks', requireAuth, async (req, res) => {
 
 app.get('/api/tasks/:id', requireAuth, async (req, res) => {
   try {
-    const task = await getAccessibleTask(req.params.id, req.user.userId)
+    const task = await getAccessibleTask(req.params.id, req.user.userId, req.user.familyId)
     if (!task) return res.status(404).json({ error: 'Task not found' })
     return res.json(shapeTask(task))
   } catch (err) {
@@ -327,7 +366,7 @@ app.get('/api/tasks/:id', requireAuth, async (req, res) => {
 
 app.put('/api/tasks/:id', requireAuth, async (req, res) => {
   try {
-    const task = await getAccessibleTask(req.params.id, req.user.userId)
+    const task = await getAccessibleTask(req.params.id, req.user.userId, req.user.familyId)
     if (!task) return res.status(404).json({ error: 'Task not found' })
     if (task.ownerId !== req.user.userId)
       return res.status(403).json({ error: 'Only the task owner can edit this task' })
@@ -342,7 +381,7 @@ app.put('/api/tasks/:id', requireAuth, async (req, res) => {
           ...(status !== undefined && { status }),
           ...(priority !== undefined && { priority }),
           ...(dueDate !== undefined && { dueDate: dueDate ? new Date(dueDate) : null }),
-          ...(isShared !== undefined && { isShared }),
+          ...(isShared !== undefined && { isShared, familyId: req.user.familyId || null }),
           ...(categoryIds?.length && { categories: { create: categoryIds.map(categoryId => ({ categoryId })) } }),
         },
         include: taskInclude,
@@ -357,7 +396,7 @@ app.put('/api/tasks/:id', requireAuth, async (req, res) => {
 
 app.delete('/api/tasks/:id', requireAuth, async (req, res) => {
   try {
-    const task = await getAccessibleTask(req.params.id, req.user.userId)
+    const task = await getAccessibleTask(req.params.id, req.user.userId, req.user.familyId)
     if (!task) return res.status(404).json({ error: 'Task not found' })
     if (task.ownerId !== req.user.userId)
       return res.status(403).json({ error: 'Only the task owner can delete this task' })
@@ -371,7 +410,7 @@ app.delete('/api/tasks/:id', requireAuth, async (req, res) => {
 
 app.get('/api/tasks/:id/updates', requireAuth, async (req, res) => {
   try {
-    const task = await getAccessibleTask(req.params.id, req.user.userId)
+    const task = await getAccessibleTask(req.params.id, req.user.userId, req.user.familyId)
     if (!task) return res.status(404).json({ error: 'Task not found' })
     const updates = await prisma.taskUpdate.findMany({
       where: { taskId: task.id },
@@ -387,7 +426,7 @@ app.get('/api/tasks/:id/updates', requireAuth, async (req, res) => {
 
 app.post('/api/tasks/:id/updates', requireAuth, async (req, res) => {
   try {
-    const task = await getAccessibleTask(req.params.id, req.user.userId)
+    const task = await getAccessibleTask(req.params.id, req.user.userId, req.user.familyId)
     if (!task) return res.status(404).json({ error: 'Task not found' })
     const { content } = req.body
     if (!content) return res.status(400).json({ error: 'content is required' })
@@ -404,7 +443,7 @@ app.post('/api/tasks/:id/updates', requireAuth, async (req, res) => {
 
 app.get('/api/tasks/:id/time-logs', requireAuth, async (req, res) => {
   try {
-    const task = await getAccessibleTask(req.params.id, req.user.userId)
+    const task = await getAccessibleTask(req.params.id, req.user.userId, req.user.familyId)
     if (!task) return res.status(404).json({ error: 'Task not found' })
     const logs = await prisma.timeLog.findMany({
       where: { taskId: task.id },
@@ -421,7 +460,7 @@ app.get('/api/tasks/:id/time-logs', requireAuth, async (req, res) => {
 
 app.post('/api/tasks/:id/time-logs', requireAuth, async (req, res) => {
   try {
-    const task = await getAccessibleTask(req.params.id, req.user.userId)
+    const task = await getAccessibleTask(req.params.id, req.user.userId, req.user.familyId)
     if (!task) return res.status(404).json({ error: 'Task not found' })
     const { durationMinutes, description, loggedAt } = req.body
     if (!durationMinutes || durationMinutes <= 0)
@@ -454,7 +493,8 @@ const categoryInclude = {
 app.get('/api/categories', requireAuth, async (req, res) => {
   try {
     const userId = req.user.userId
-    const accessible = { OR: [{ ownerId: userId }, { isShared: true }] }
+    const familyId = req.user.familyId
+    const accessible = getAccessibleCategoryFilter(userId, familyId)
     const categories = await prisma.category.findMany({
       where: { ...accessible, parentId: null },
       orderBy: { name: 'asc' },
@@ -479,13 +519,14 @@ app.post('/api/categories', requireAuth, async (req, res) => {
     const { name, description, color, isShared, parentId } = req.body
     if (!name) return res.status(400).json({ error: 'name is required' })
     if (parentId) {
-      const parent = await getAccessibleCategory(parentId, req.user.userId)
+      const parent = await getAccessibleCategory(parentId, req.user.userId, req.user.familyId)
       if (!parent) return res.status(404).json({ error: 'Parent category not found' })
       if (parent.parentId) return res.status(400).json({ error: 'Cannot nest more than 2 levels deep' })
     }
     const category = await prisma.category.create({
       data: {
         name, description, color: color || '#f59e0b', isShared: isShared ?? false,
+        familyId: req.user.familyId || null,
         ownerId: req.user.userId,
         ...(parentId && { parentId }),
       },
@@ -500,7 +541,7 @@ app.post('/api/categories', requireAuth, async (req, res) => {
 
 app.put('/api/categories/:id', requireAuth, async (req, res) => {
   try {
-    const category = await getAccessibleCategory(req.params.id, req.user.userId)
+    const category = await getAccessibleCategory(req.params.id, req.user.userId, req.user.familyId)
     if (!category) return res.status(404).json({ error: 'Category not found' })
     if (category.ownerId !== req.user.userId)
       return res.status(403).json({ error: 'Only the category owner can edit it' })
@@ -511,7 +552,7 @@ app.put('/api/categories/:id', requireAuth, async (req, res) => {
         ...(name !== undefined && { name }),
         ...(description !== undefined && { description }),
         ...(color !== undefined && { color }),
-        ...(isShared !== undefined && { isShared }),
+        ...(isShared !== undefined && { isShared, familyId: req.user.familyId || null }),
       },
       include: { ...categoryInclude, children: { include: categoryInclude } },
     })
@@ -524,7 +565,7 @@ app.put('/api/categories/:id', requireAuth, async (req, res) => {
 
 app.delete('/api/categories/:id', requireAuth, async (req, res) => {
   try {
-    const category = await getAccessibleCategory(req.params.id, req.user.userId)
+    const category = await getAccessibleCategory(req.params.id, req.user.userId, req.user.familyId)
     if (!category) return res.status(404).json({ error: 'Category not found' })
     if (category.ownerId !== req.user.userId)
       return res.status(403).json({ error: 'Only the category owner can delete it' })
@@ -567,8 +608,10 @@ app.get('/api/calendar/feed', async (req, res) => {
   }
 
   try {
+    const membership = await prisma.familyMember.findFirst({ where: { userId }, select: { familyId: true } })
+    const accessFilter = getAccessibleTaskFilter(userId, membership?.familyId)
     const tasks = await prisma.task.findMany({
-      where: { OR: [{ ownerId: userId }, { isShared: true }], dueDate: { not: null } },
+      where: { ...accessFilter, dueDate: { not: null } },
       select: { id: true, title: true, description: true, status: true, dueDate: true },
       orderBy: { dueDate: 'asc' },
     })
