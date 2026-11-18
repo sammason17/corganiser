@@ -40,15 +40,16 @@ export default function BudgetDashboard() {
     try {
       const res = await api.getFamilyCurrent();
       setFamilyInfo(res);
-      setFamilyNameInput(res.family?.name || '');
+      setFamilyNameInput(res.name || res.family?.name || '');
     } catch (err) {
       console.warn('Could not fetch family:', err);
     }
   };
 
   const handleCopyInvite = () => {
-    if (!familyInfo?.family?.inviteCode) return;
-    navigator.clipboard.writeText(familyInfo.family.inviteCode);
+    const code = familyInfo?.inviteCode || familyInfo?.family?.inviteCode;
+    if (!code) return;
+    navigator.clipboard.writeText(code);
     setCopiedInvite(true);
     setTimeout(() => setCopiedInvite(false), 2500);
   };
@@ -57,7 +58,11 @@ export default function BudgetDashboard() {
     if (!window.confirm('Regenerate family invite code? The old code will immediately stop working.')) return;
     try {
       const res = await api.regenerateFamilyInviteCode();
-      setFamilyInfo(prev => ({ ...prev, family: { ...prev.family, inviteCode: res.inviteCode } }));
+      setFamilyInfo(prev => ({
+        ...prev,
+        inviteCode: res.inviteCode,
+        ...(prev?.family ? { family: { ...prev.family, inviteCode: res.inviteCode } } : {})
+      }));
       alert('New invite code generated!');
     } catch (err) {
       alert(err.response?.data?.error || err.message || 'Failed to regenerate invite code');
@@ -224,10 +229,10 @@ export default function BudgetDashboard() {
           title="Household and Family Sharing Settings"
         >
           <Users size={15} className="text-indigo-600" />
-          <span>{familyInfo?.family?.name || 'Household'}</span>
-          {familyInfo?.family?.members?.length > 0 && (
+          <span>{familyInfo?.name || familyInfo?.family?.name || 'Household'}</span>
+          {(familyInfo?.members?.length > 0 || familyInfo?.family?.members?.length > 0) && (
             <span className="text-[10px] bg-white text-indigo-700 px-1.5 py-0.5 rounded-full border border-indigo-200 font-mono font-bold">
-              {familyInfo.family.members.length} {familyInfo.family.members.length === 1 ? 'member' : 'members'}
+              {(familyInfo.members || familyInfo.family?.members || []).length} {((familyInfo.members || familyInfo.family?.members || []).length === 1) ? 'member' : 'members'}
             </span>
           )}
         </button>
@@ -450,173 +455,179 @@ export default function BudgetDashboard() {
       </div>
 
       {/* Family Sharing Modal */}
-      {showFamilyModal && familyInfo?.family && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
-          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-slate-800 relative">
-            <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
-                  <Users size={20} />
+      {showFamilyModal && (familyInfo?.family || familyInfo) && (() => {
+        const currentFamily = familyInfo.family || familyInfo;
+        const isOwner = familyInfo.isOwner !== undefined ? familyInfo.isOwner : (familyInfo.userRole === 'OWNER');
+        const currentUserId = familyInfo.currentUserId || familyInfo.userId;
+        const membersList = currentFamily.members || [];
+        return (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+            <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-slate-800 relative">
+              <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                    <Users size={20} />
+                  </div>
+                  <div>
+                    <h3 className="text-lg font-black tracking-tight text-slate-900">Household & Family Sharing</h3>
+                    <p className="text-xs text-slate-500">Shared cards, food shops, and settlement emails</p>
+                  </div>
                 </div>
-                <div>
-                  <h3 className="text-lg font-black tracking-tight text-slate-900">Household & Family Sharing</h3>
-                  <p className="text-xs text-slate-500">Shared cards, food shops, and settlement emails</p>
-                </div>
-              </div>
-              <button
-                onClick={() => setShowFamilyModal(false)}
-                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1 rounded-lg hover:bg-slate-100"
-              >
-                ✕
-              </button>
-            </div>
-
-            <div className="space-y-6">
-              {/* Family Name */}
-              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Family Name</span>
-                  {familyInfo.isOwner && !editingFamilyName && (
-                    <button
-                      onClick={() => setEditingFamilyName(true)}
-                      className="text-xs text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1"
-                    >
-                      <Pencil size={11} /> Rename
-                    </button>
-                  )}
-                </div>
-
-                {editingFamilyName ? (
-                  <form onSubmit={handleSaveFamilyName} className="flex gap-2 mt-2">
-                    <input
-                      type="text"
-                      value={familyNameInput}
-                      onChange={e => setFamilyNameInput(e.target.value)}
-                      className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
-                    />
-                    <button
-                      type="submit"
-                      disabled={isRenaming}
-                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
-                    >
-                      {isRenaming ? 'Saving...' : 'Save'}
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => { setEditingFamilyName(false); setFamilyNameInput(familyInfo.family.name); }}
-                      className="text-slate-500 hover:text-slate-700 text-xs px-2 py-1.5"
-                    >
-                      Cancel
-                    </button>
-                  </form>
-                ) : (
-                  <p className="text-base font-black text-slate-900 tracking-tight">{familyInfo.family.name}</p>
-                )}
+                <button
+                  onClick={() => setShowFamilyModal(false)}
+                  className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1 rounded-lg hover:bg-slate-100"
+                >
+                  ✕
+                </button>
               </div>
 
-              {/* Invite Code Box */}
-              <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4">
-                <div className="flex items-center justify-between mb-2">
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Family Invite Code</span>
-                  <span className="text-[11px] text-indigo-500">Share with household members</span>
-                </div>
-                <div className="flex items-center justify-between bg-white rounded-xl p-3 border border-indigo-200/70 shadow-sm">
-                  <span className="font-mono text-lg font-black tracking-widest text-indigo-950">
-                    {familyInfo.family.inviteCode}
-                  </span>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={handleCopyInvite}
-                      className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm"
-                    >
-                      <Copy size={13} />
-                      {copiedInvite ? 'Copied!' : 'Copy Code'}
-                    </button>
-                    {familyInfo.isOwner && (
+              <div className="space-y-6">
+                {/* Family Name */}
+                <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Family Name</span>
+                    {isOwner && !editingFamilyName && (
                       <button
-                        onClick={handleRegenerateInvite}
-                        title="Regenerate invite code"
-                        className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                        onClick={() => setEditingFamilyName(true)}
+                        className="text-xs text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1"
                       >
-                        <RefreshCw size={13} />
+                        <Pencil size={11} /> Rename
                       </button>
                     )}
                   </div>
-                </div>
-              </div>
 
-              {/* Members List */}
-              <div>
-                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
-                  Family Members ({familyInfo.family.members?.length || 0})
-                </h4>
-                <div className="space-y-2 max-h-48 overflow-y-auto">
-                  {familyInfo.family.members?.map(m => (
-                    <div
-                      key={m.id}
-                      className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100"
-                    >
-                      <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center">
-                          {m.user.name?.charAt(0)?.toUpperCase() || 'U'}
-                        </div>
-                        <div>
-                          <p className="text-xs font-bold text-slate-900 leading-tight">
-                            {m.user.name} {m.userId === familyInfo.currentUserId && <span className="text-slate-400 font-normal">(You)</span>}
-                          </p>
-                          <p className="text-[10px] text-slate-400 font-medium">{m.user.email}</p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
-                          m.role === 'OWNER' 
-                            ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' 
-                            : 'bg-slate-200 text-slate-600'
-                        }`}>
-                          {m.role}
-                        </span>
-                        {familyInfo.isOwner && m.userId !== familyInfo.currentUserId && (
-                          <button
-                            onClick={() => handleRemoveMember(m.userId, m.user.name)}
-                            className="text-slate-400 hover:text-rose-500 p-1 rounded hover:bg-slate-100 transition-colors"
-                            title="Remove member"
-                          >
-                            <Trash2 size={13} />
-                          </button>
-                        )}
-                      </div>
+                  {editingFamilyName ? (
+                    <form onSubmit={handleSaveFamilyName} className="flex gap-2 mt-2">
+                      <input
+                        type="text"
+                        value={familyNameInput}
+                        onChange={e => setFamilyNameInput(e.target.value)}
+                        className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isRenaming}
+                        className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
+                      >
+                        {isRenaming ? 'Saving...' : 'Save'}
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => { setEditingFamilyName(false); setFamilyNameInput(currentFamily.name); }}
+                        className="text-slate-500 hover:text-slate-700 text-xs px-2 py-1.5"
+                      >
+                        Cancel
+                      </button>
+                    </form>
+                  ) : (
+                    <p className="text-base font-black text-slate-900 tracking-tight">{currentFamily.name}</p>
+                  )}
+                </div>
+
+                {/* Invite Code Box */}
+                <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4">
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Family Invite Code</span>
+                    <span className="text-[11px] text-indigo-500">Share with household members</span>
+                  </div>
+                  <div className="flex items-center justify-between bg-white rounded-xl p-3 border border-indigo-200/70 shadow-sm">
+                    <span className="font-mono text-lg font-black tracking-widest text-indigo-950">
+                      {currentFamily.inviteCode}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={handleCopyInvite}
+                        className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                      >
+                        <Copy size={13} />
+                        {copiedInvite ? 'Copied!' : 'Copy Code'}
+                      </button>
+                      {isOwner && (
+                        <button
+                          onClick={handleRegenerateInvite}
+                          title="Regenerate invite code"
+                          className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                        >
+                          <RefreshCw size={13} />
+                        </button>
+                      )}
                     </div>
-                  ))}
+                  </div>
                 </div>
-              </div>
 
-              {/* Join another family */}
-              <div className="pt-3 border-t border-slate-100">
-                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
-                  Join a Different Family
-                </p>
-                <form onSubmit={handleJoinFamily} className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="Enter Invite Code (e.g. FAM-XYZ123)"
-                    value={joinCodeInput}
-                    onChange={e => setJoinCodeInput(e.target.value)}
-                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold uppercase placeholder:normal-case placeholder:font-sans outline-none focus:border-indigo-500 focus:bg-white"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isJoining || !joinCodeInput.trim()}
-                    className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
-                  >
-                    {isJoining ? 'Joining...' : 'Join'}
-                  </button>
-                </form>
-              </div>
+                {/* Members List */}
+                <div>
+                  <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+                    Family Members ({membersList.length})
+                  </h4>
+                  <div className="space-y-2 max-h-48 overflow-y-auto">
+                    {membersList.map(m => (
+                      <div
+                        key={m.id || m.userId}
+                        className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100"
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center">
+                            {(m.name || m.user?.name || 'U').charAt(0)?.toUpperCase()}
+                          </div>
+                          <div>
+                            <p className="text-xs font-bold text-slate-900 leading-tight">
+                              {m.name || m.user?.name} {m.userId === currentUserId && <span className="text-slate-400 font-normal">(You)</span>}
+                            </p>
+                            <p className="text-[10px] text-slate-400 font-medium">{m.email || m.user?.email}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                            m.role === 'OWNER' 
+                              ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' 
+                              : 'bg-slate-200 text-slate-600'
+                          }`}>
+                            {m.role}
+                          </span>
+                          {isOwner && m.userId !== currentUserId && (
+                            <button
+                              onClick={() => handleRemoveMember(m.userId, m.name || m.user?.name)}
+                              className="text-slate-400 hover:text-rose-500 p-1 rounded hover:bg-slate-100 transition-colors"
+                              title="Remove member"
+                            >
+                              <Trash2 size={13} />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
 
+                {/* Join another family */}
+                <div className="pt-3 border-t border-slate-100">
+                  <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                    Join a Different Family
+                  </p>
+                  <form onSubmit={handleJoinFamily} className="flex gap-2">
+                    <input
+                      type="text"
+                      placeholder="Enter Invite Code (e.g. FAM-XYZ123)"
+                      value={joinCodeInput}
+                      onChange={e => setJoinCodeInput(e.target.value)}
+                      className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold uppercase placeholder:normal-case placeholder:font-sans outline-none focus:border-indigo-500 focus:bg-white"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isJoining || !joinCodeInput.trim()}
+                      className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
+                    >
+                      {isJoining ? 'Joining...' : 'Join'}
+                    </button>
+                  </form>
+                </div>
+
+              </div>
             </div>
           </div>
-        </div>
-      )}
+        );
+      })()}
     </div>
   );
 }

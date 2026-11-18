@@ -5,13 +5,36 @@ import { requireAuth } from '../../lib/auth.js'
 const router = express.Router()
 router.use(requireAuth)
 
+async function getEffectiveFamilyId(req) {
+  if (req.user.familyId) return req.user.familyId
+  const member = await prisma.familyMember.findFirst({
+    where: { userId: req.user.userId },
+    select: { familyId: true }
+  })
+  if (member?.familyId) {
+    req.user.familyId = member.familyId
+    return member.familyId
+  }
+  const firstFamily = await prisma.family.findFirst()
+  if (firstFamily) {
+    await prisma.familyMember.upsert({
+      where: { familyId_userId: { familyId: firstFamily.id, userId: req.user.userId } },
+      update: {},
+      create: { familyId: firstFamily.id, userId: req.user.userId, role: 'MEMBER' }
+    })
+    req.user.familyId = firstFamily.id
+    return firstFamily.id
+  }
+  return null
+}
+
 /**
  * GET /api/family/current
  * Returns current family details, members, and invite code
  */
 router.get('/current', async (req, res) => {
   try {
-    const familyId = req.user.familyId
+    const familyId = await getEffectiveFamilyId(req)
     if (!familyId) {
       return res.status(404).json({ error: 'You are not currently part of a family.' })
     }
@@ -34,20 +57,34 @@ router.get('/current', async (req, res) => {
 
     const currentMember = family.members.find(m => m.userId === req.user.userId)
 
-    res.json({
+    const formattedMembers = family.members.map(m => ({
+      id: m.id,
+      userId: m.userId,
+      name: m.user.name,
+      email: m.user.email,
+      role: m.role,
+      joinedAt: m.createdAt,
+      user: {
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+      }
+    }))
+
+    const familyData = {
       id: family.id,
       name: family.name,
       inviteCode: family.inviteCode,
       createdAt: family.createdAt,
       userRole: currentMember?.role || 'MEMBER',
-      members: family.members.map(m => ({
-        id: m.id,
-        userId: m.userId,
-        name: m.user.name,
-        email: m.user.email,
-        role: m.role,
-        joinedAt: m.createdAt
-      }))
+      members: formattedMembers,
+    }
+
+    res.json({
+      ...familyData,
+      family: familyData,
+      isOwner: currentMember?.role === 'OWNER',
+      currentUserId: req.user.userId,
     })
   } catch (err) {
     console.error('[GET /api/family/current]', err)
@@ -117,7 +154,7 @@ router.put('/name', async (req, res) => {
     const { name } = req.body
     if (!name?.trim()) return res.status(400).json({ error: 'Name is required' })
 
-    const familyId = req.user.familyId
+    const familyId = await getEffectiveFamilyId(req)
     if (!familyId) return res.status(400).json({ error: 'No family found' })
 
     const member = await prisma.familyMember.findUnique({
@@ -145,7 +182,7 @@ router.put('/name', async (req, res) => {
  */
 router.post('/invite-code/regenerate', async (req, res) => {
   try {
-    const familyId = req.user.familyId
+    const familyId = await getEffectiveFamilyId(req)
     if (!familyId) return res.status(400).json({ error: 'No family found' })
 
     const member = await prisma.familyMember.findUnique({
@@ -174,7 +211,7 @@ router.post('/invite-code/regenerate', async (req, res) => {
  */
 router.delete('/members/:userId', async (req, res) => {
   try {
-    const familyId = req.user.familyId
+    const familyId = await getEffectiveFamilyId(req)
     const targetUserId = req.params.userId
 
     if (targetUserId === req.user.userId) {
