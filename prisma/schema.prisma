@@ -490,6 +490,8 @@ model SharedAmexExport {
   partnerOwesForMyShops  Float?   @map("partner_owes_for_my_shops")
   iOweForPartnerShops    Float?   @map("i_owe_for_partner_shops")
   finalAmountPartnerOwes Float?   @map("final_amount_partner_owes")
+  primaryName            String   @default("Me") @map("primary_name")
+  partnerName            String   @default("Partner") @map("partner_name")
   autoExported           Boolean  @default(false) @map("auto_exported")
   isOverridden           Boolean  @default(false) @map("is_overridden")
   overrideReason         String?  @map("override_reason")
@@ -511,6 +513,8 @@ model AmexAutomationConfig {
   consentExpiresAt           DateTime? @map("consent_expires_at")
 
   cardAccountId              String?   @map("card_account_id")
+  cardholderName             String?   @map("cardholder_name")
+  cardDisplayName            String?   @map("card_display_name")
   laurenSupplementaryCardId  String?   @map("lauren_supplementary_card_id")
 
   lastKnownStatementDate     String?   @map("last_known_statement_date")

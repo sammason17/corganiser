@@ -1,7 +1,7 @@
 import express from 'express'
 import prisma from '../../lib/prisma.js'
 import { requireAuth } from '../../lib/auth.js'
-import { getUniqueExportName, executeSettlementExportAndClear, executeExportManualOverride } from '../../lib/settlementAutomation.js'
+import { getUniqueExportName, executeSettlementExportAndClear, executeExportManualOverride, resolveFamilyNames } from '../../lib/settlementAutomation.js'
 
 const router = express.Router()
 router.use(requireAuth)
@@ -436,7 +436,48 @@ router.get('/calculator/state', async (req, res) => {
     } else if (!state) {
       state = await prisma.sharedAmexState.findFirst()
     }
-    res.json({ shops, partnerStatementAmount: state?.partnerStatementAmount || 0 })
+
+    // Resolve family members
+    let familyMembers = []
+    if (familyId) {
+      const members = await prisma.familyMember.findMany({
+        where: { familyId },
+        include: { user: { select: { id: true, name: true, email: true } } },
+        orderBy: { createdAt: 'asc' }
+      })
+      familyMembers = members.map(m => ({
+        id: m.user.id,
+        name: m.user.name,
+        email: m.user.email,
+        role: m.role
+      }))
+    } else {
+      const currentUser = await prisma.user.findUnique({
+        where: { id: req.user.userId },
+        select: { id: true, name: true, email: true }
+      })
+      if (currentUser) {
+        familyMembers = [{ id: currentUser.id, name: currentUser.name, email: currentUser.email, role: 'OWNER' }]
+      }
+    }
+
+    // Resolve dynamic primary and partner names
+    const { primaryName, partnerName } = await resolveFamilyNames(familyId)
+
+    // Retrieve card configuration metadata if connected
+    const config = familyId
+      ? await prisma.amexAutomationConfig.findUnique({ where: { familyId } })
+      : await prisma.amexAutomationConfig.findFirst()
+
+    res.json({
+      shops,
+      partnerStatementAmount: state?.partnerStatementAmount || 0,
+      familyMembers,
+      primaryName,
+      partnerName,
+      cardholderName: config?.cardholderName || null,
+      cardDisplayName: config?.cardDisplayName || null,
+    })
   } catch (err) {
     console.error('[Calculator State Error]', err)
     res.status(500).json({ error: 'Server error' })
@@ -580,11 +621,15 @@ router.post('/calculator/exports', async (req, res) => {
       : await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
     const partnerStatementAmount = state?.partnerStatementAmount || 0
 
+    const { primaryName, partnerName } = await resolveFamilyNames(familyId)
+
     const newExport = await prisma.sharedAmexExport.create({
       data: {
         name,
         partnerStatementAmount,
         shopsData: shops,
+        primaryName,
+        partnerName,
         familyId: familyId || null
       }
     })

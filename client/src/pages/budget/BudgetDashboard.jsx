@@ -1135,6 +1135,13 @@ function AmexStatementCalculator() {
   const [loading, setLoading] = useState(true);
   const [showAllShops, setShowAllShops] = useState(false);
 
+  // Dynamic names & family state
+  const [familyMembers, setFamilyMembers] = useState([]);
+  const [primaryName, setPrimaryName] = useState('Sam');
+  const [partnerName, setPartnerName] = useState('Lauren');
+  const [cardDisplayName, setCardDisplayName] = useState(null);
+  const [cardholderName, setCardholderName] = useState(null);
+
   // TrueLayer state
   const [tlStatus, setTlStatus] = useState(null);
   const [tlCardsData, setTlCardsData] = useState(null);
@@ -1153,7 +1160,7 @@ function AmexStatementCalculator() {
   // Form State
   const [vendorName, setVendorName] = useState('');
   const [totalAmount, setTotalAmount] = useState('');
-  const [payerName, setPayerName] = useState('Sam');
+  const [payerName, setPayerName] = useState('');
   const [payerCoveredAmount, setPayerCoveredAmount] = useState('');
 
   const fetchTlStatus = async () => {
@@ -1175,6 +1182,14 @@ function AmexStatementCalculator() {
       setLiveShops(stateData.shops);
       setLivePartnerStatement(stateData.partnerStatementAmount);
       setExportsList(exportsData);
+      if (stateData.familyMembers) setFamilyMembers(stateData.familyMembers);
+      if (stateData.primaryName) {
+        setPrimaryName(stateData.primaryName);
+        setPayerName(prev => prev || stateData.primaryName);
+      }
+      if (stateData.partnerName) setPartnerName(stateData.partnerName);
+      if (stateData.cardDisplayName) setCardDisplayName(stateData.cardDisplayName);
+      if (stateData.cardholderName) setCardholderName(stateData.cardholderName);
       await fetchTlStatus();
     } catch (err) {
       console.error(err);
@@ -1273,7 +1288,7 @@ function AmexStatementCalculator() {
     await api.createSharedAmexShop({
       vendorName,
       totalAmount,
-      payerName,
+      payerName: payerName || primaryName,
       payerCoveredAmount
     });
     setVendorName('');
@@ -1302,9 +1317,18 @@ function AmexStatementCalculator() {
     }
   };
 
+  const activeExport = exportsList.find(e => e.id === selectedExportId);
+  const isReadOnly = !!activeExport;
+  const shops = activeExport ? activeExport.shopsData : liveShops;
+  const partnerStatement = activeExport ? activeExport.partnerStatementAmount : livePartnerStatement;
+
+  const currentPrimary = (activeExport?.primaryName && activeExport.primaryName !== 'Me') ? activeExport.primaryName : primaryName;
+  const currentPartner = (activeExport?.partnerName && activeExport.partnerName !== 'Partner') ? activeExport.partnerName : partnerName;
+  const familyNamesList = familyMembers.length > 0 ? familyMembers.map(m => m.name).join(' & ') : `${currentPrimary} & ${currentPartner}`;
+
   const handleSettleAndEmail = async () => {
     const nextName = await api.getNextCalculatorExportName().catch(() => new Date().toLocaleDateString('en-GB', { month: 'long', year: 'numeric' }).replace(' ', '-'));
-    const confirmMsg = `Are you sure you want to finalize this month?\n\nThis will:\n1. Archive to "${nextName}"\n2. Send statement summary emails to Sam & Lauren\n3. Clear shops and reset calculator for next month`;
+    const confirmMsg = `Are you sure you want to finalize this month?\n\nThis will:\n1. Archive to "${nextName}"\n2. Send statement summary emails to ${familyNamesList}\n3. Clear shops and reset calculator for next month`;
     if (!window.confirm(confirmMsg)) return;
 
     setIsSettling(true);
@@ -1348,7 +1372,7 @@ function AmexStatementCalculator() {
       setShowOverrideModal(false);
       setOverrideAlert({
         type: 'success',
-        message: `Manual override applied for ${currentActive.name}! An amended statement email has been sent to Sam and Lauren.`
+        message: `Manual override applied for ${currentActive.name}! An amended statement email has been sent to ${currentPrimary} and ${currentPartner}.`
       });
       setTimeout(() => setOverrideAlert(null), 8000);
     } catch (err) {
@@ -1361,11 +1385,6 @@ function AmexStatementCalculator() {
 
   if (loading) return null;
 
-  const activeExport = exportsList.find(e => e.id === selectedExportId);
-  const isReadOnly = !!activeExport;
-  const shops = activeExport ? activeExport.shopsData : liveShops;
-  const partnerStatement = activeExport ? activeExport.partnerStatementAmount : livePartnerStatement;
-
   const sortedShops = [...shops].sort((a, b) => new Date(b.date) - new Date(a.date));
   const visibleShops = showAllShops ? sortedShops : sortedShops.slice(0, 3);
 
@@ -1374,7 +1393,8 @@ function AmexStatementCalculator() {
 
   shops.forEach(shop => {
     const remainder = shop.totalAmount - shop.payerCoveredAmount;
-    if (shop.payerName === 'Sam') {
+    const isPrimaryPayer = (shop.payerName || '').trim().toLowerCase() === (currentPrimary || '').trim().toLowerCase() || (shop.payerName || '').toLowerCase() === 'me';
+    if (isPrimaryPayer) {
       partnerOwesForMyShops += remainder;
     } else {
       iOweForPartnerShops += remainder;
@@ -1407,7 +1427,7 @@ function AmexStatementCalculator() {
             <p className="text-[11px] text-slate-400">
               {tlStatus?.isConnected
                 ? `Auto-settles on 24th (Statement 20th–19th) • Last settled: ${tlStatus.lastProcessedStatementDate || 'None this cycle'}`
-                : 'Connect credit card to automatically populate Lauren\'s statement and settle monthly'}
+                : `Connect credit card to automatically populate ${currentPartner}'s statement and settle monthly`}
             </p>
           </div>
         </div>
@@ -1523,7 +1543,7 @@ function AmexStatementCalculator() {
                 type="button"
                 onClick={handleOpenOverrideModal}
                 className="flex items-center gap-1.5 text-[10px] text-amber-300 hover:text-white font-bold uppercase tracking-widest bg-amber-500/20 hover:bg-amber-500/40 px-3 py-2 rounded-lg border border-amber-500/30 transition-all shadow-sm"
-                title="Manually adjust Lauren's statement spend and send amended statement email to Sam and Lauren"
+                title={`Manually adjust ${currentPartner}'s statement spend and send amended statement email to ${currentPrimary} and ${currentPartner}`}
               >
                 <Edit3 size={12} />
                 Manual Override
@@ -1534,7 +1554,7 @@ function AmexStatementCalculator() {
                   onClick={handleSettleAndEmail}
                   disabled={isSettling}
                   className="flex items-center gap-1.5 text-[10px] text-emerald-300 hover:text-white font-bold uppercase tracking-widest bg-emerald-500/20 hover:bg-emerald-600 px-3 py-2 rounded-lg border border-emerald-500/30 transition-all shadow-sm"
-                  title="Archive month, send breakdown email to Sam & Lauren, and clear for next month"
+                  title={`Archive month, send breakdown email to ${familyNamesList}, and clear for next month`}
                 >
                   <Mail size={12} />
                   {isSettling ? 'Settling...' : 'Settle & Email'}
@@ -1606,16 +1626,17 @@ function AmexStatementCalculator() {
               <div className="lg:col-span-2">
                 <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">Who Paid?</label>
                 <select 
-                  value={payerName} 
+                  value={payerName || currentPrimary} 
                   onChange={e => setPayerName(e.target.value)} 
                   className="w-full bg-slate-900 text-white text-xs px-3 py-2.5 rounded-lg border border-white/10 outline-none focus:border-blue-400"
                 >
-                  <option value="Sam">Sam</option>
-                  <option value="Lauren">Lauren</option>
+                  {(familyMembers && familyMembers.length > 0 ? familyMembers : [{ name: currentPrimary }, { name: currentPartner }]).map(m => (
+                    <option key={m.name} value={m.name}>{m.name}</option>
+                  ))}
                 </select>
               </div>
               <div className="lg:col-span-2">
-                <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{payerName} Covers (£)</label>
+                <label className="block text-[10px] text-slate-400 font-bold uppercase tracking-wider mb-1">{payerName || currentPrimary} Covers (£)</label>
                 <input 
                   placeholder="0.00" 
                   type="number" 
@@ -1669,7 +1690,9 @@ function AmexStatementCalculator() {
                   <p className="font-mono text-xs font-semibold text-blue-200">{formatCurrency(shop.totalAmount)}</p>
                 </div>
                 <div className="text-left sm:text-right border-l border-white/10 pl-3 sm:pl-4 flex-1 sm:flex-none">
-                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">{shop.payerName === 'Sam' ? 'Lauren Owes' : 'Sam Owes'}</p>
+                  <p className="text-[9px] text-slate-400 font-bold uppercase tracking-wider">
+                    {(shop.payerName || '').trim().toLowerCase() === (currentPrimary || '').trim().toLowerCase() ? `${currentPartner} Owes` : `${currentPrimary} Owes`}
+                  </p>
                   <p className="font-mono text-xs font-bold text-emerald-400">{formatCurrency(shop.totalAmount - shop.payerCoveredAmount)}</p>
                 </div>
                 {!isReadOnly && (
@@ -1706,16 +1729,16 @@ function AmexStatementCalculator() {
           )}
         </div>
 
-        {/* Bottom Section: Lauren's Statement Amount & Settlement Breakdown */}
+        {/* Bottom Section: Partner's Statement Amount & Settlement Breakdown */}
         <div className="mt-8 pt-8 border-t border-white/10 grid grid-cols-1 lg:grid-cols-2 gap-6 items-stretch">
           
-          {/* Left Card: Lauren's Statement Amount */}
+          {/* Left Card: Partner's Statement Amount */}
           <div className="bg-white/5 rounded-2xl p-6 border border-white/10 flex flex-col justify-between">
             <div>
               <div className="flex items-center justify-between mb-2">
                 <h3 className="text-xs font-bold uppercase tracking-widest text-slate-300 flex items-center gap-2">
                   <CreditCard size={15} className="text-indigo-400" />
-                  Lauren's Statement Amount
+                  {currentPartner}'s Statement Amount
                 </h3>
                 {tlStatus?.isConnected && (
                   <span className="text-[10px] font-mono bg-emerald-500/10 text-emerald-300 border border-emerald-500/20 px-2 py-0.5 rounded-full flex items-center gap-1">
@@ -1724,7 +1747,7 @@ function AmexStatementCalculator() {
                 )}
               </div>
               <p className="text-[11px] text-slate-400 mb-4">
-                Total charges on Lauren's card for this statement cycle (20th to 19th). Auto-settles on 24th via TrueLayer or editable manually.
+                Total charges on {currentPartner}'s card for this statement cycle (20th to 19th). Auto-settles on 24th via TrueLayer or editable manually.
               </p>
             </div>
             
@@ -1755,15 +1778,15 @@ function AmexStatementCalculator() {
               </h3>
               <div className="space-y-2.5">
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Lauren's Statement Amount</span>
+                  <span className="text-slate-400">{currentPartner}'s Statement Amount</span>
                   <span className="font-mono text-white font-semibold">{formatCurrency(partnerStatement)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Lauren owes for your shops</span>
+                  <span className="text-slate-400">{currentPartner} owes for {currentPrimary}'s shops</span>
                   <span className="font-mono text-emerald-400 font-semibold">+{formatCurrency(partnerOwesForMyShops)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs pb-3 border-b border-white/10">
-                  <span className="text-slate-400">Sam owes for Lauren's shops</span>
+                  <span className="text-slate-400">{currentPrimary} owes for {currentPartner}'s shops</span>
                   <span className="font-mono text-rose-400 font-semibold">-{formatCurrency(iOweForPartnerShops)}</span>
                 </div>
               </div>
@@ -1771,10 +1794,12 @@ function AmexStatementCalculator() {
 
             <div className="mt-4 bg-blue-500/10 border border-blue-500/20 rounded-xl p-4 flex items-center justify-between">
               <div>
-                <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">Final Amount Lauren Owes</p>
+                <p className="text-[10px] font-black uppercase tracking-widest text-slate-300">
+                  {finalAmountPartnerOwes >= 0 ? `Final Amount ${currentPartner} Owes` : `Final Amount ${currentPrimary} Owes`}
+                </p>
                 <p className="text-[10px] text-slate-400 mt-0.5">Total settlement due for this month</p>
               </div>
-              <span className="font-mono text-2xl sm:text-3xl font-black text-blue-400">{formatCurrency(finalAmountPartnerOwes)}</span>
+              <span className="font-mono text-2xl sm:text-3xl font-black text-blue-400">{formatCurrency(Math.abs(finalAmountPartnerOwes))}</span>
             </div>
           </div>
 
@@ -1812,13 +1837,13 @@ function AmexStatementCalculator() {
                   <span>Outlier & Statement Correction</span>
                 </div>
                 <p className="text-[11px] leading-relaxed text-amber-200/80">
-                  Confirming this manual override will update the archived records for <strong>{activeExport.name}</strong> and immediately re-send an amended statement email to <strong>Sam</strong> and <strong>Lauren</strong> stating that the total was manually updated due to an incorrect statement amount.
+                  Confirming this manual override will update the archived records for <strong>{activeExport.name}</strong> and immediately re-send an amended statement email to <strong>{currentPrimary}</strong> and <strong>{currentPartner}</strong> stating that the total was manually updated due to an incorrect statement amount.
                 </p>
               </div>
 
               <div>
                 <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1.5">
-                  Lauren's Statement Amount (£)
+                  {currentPartner}'s Statement Amount (£)
                 </label>
                 <div className="relative">
                   <span className="absolute left-3.5 top-1/2 -translate-y-1/2 text-white font-bold text-lg">£</span>
@@ -1856,20 +1881,22 @@ function AmexStatementCalculator() {
                   Recalculated Settlement Preview
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Lauren's Statement Spend</span>
+                  <span className="text-slate-400">{currentPartner}'s Statement Spend</span>
                   <span className="font-mono text-white font-semibold">{formatCurrency(previewAmount)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs">
-                  <span className="text-slate-400">Lauren owes for Sam's shops ({shops.filter(s=>s.payerName==='Sam').length})</span>
+                  <span className="text-slate-400">{currentPartner} owes for {currentPrimary}'s shops ({shops.filter(s=>((s.payerName||'').toLowerCase()===(currentPrimary||'').toLowerCase())).length})</span>
                   <span className="font-mono text-emerald-400 font-semibold">+{formatCurrency(partnerOwesForMyShops)}</span>
                 </div>
                 <div className="flex justify-between items-center text-xs pb-2 border-b border-white/10">
-                  <span className="text-slate-400">Sam owes for Lauren's shops ({shops.filter(s=>s.payerName!=='Sam').length})</span>
+                  <span className="text-slate-400">{currentPrimary} owes for {currentPartner}'s shops ({shops.filter(s=>((s.payerName||'').toLowerCase()!==(currentPrimary||'').toLowerCase())).length})</span>
                   <span className="font-mono text-rose-400 font-semibold">-{formatCurrency(iOweForPartnerShops)}</span>
                 </div>
                 <div className="flex justify-between items-center pt-1">
-                  <span className="text-xs font-bold uppercase text-slate-300">Amended Final Amount Lauren Owes</span>
-                  <span className="font-mono text-xl font-black text-amber-400">{formatCurrency(previewFinalOwes)}</span>
+                  <span className="text-xs font-bold uppercase text-slate-300">
+                    Amended Final Amount {previewFinalOwes >= 0 ? currentPartner : currentPrimary} Owes
+                  </span>
+                  <span className="font-mono text-xl font-black text-amber-400">{formatCurrency(Math.abs(previewFinalOwes))}</span>
                 </div>
               </div>
 

@@ -25,7 +25,7 @@ function verifyCronSecret(req, res, next) {
 
 /**
  * GET /api/cron/amex-precheck
- * Triggered on the 18th of each month to send pre-statement reminder to Sam
+ * Triggered on the 18th of each month to send pre-statement reminder to family lead
  */
 router.get('/amex-precheck', verifyCronSecret, async (req, res) => {
   try {

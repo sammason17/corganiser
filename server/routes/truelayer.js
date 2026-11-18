@@ -135,10 +135,14 @@ router.all('/callback', async (req, res) => {
 
     // Discover available cards
     let defaultCardId = null
+    let cardholderName = null
+    let cardDisplayName = null
     try {
       const cards = await getCards(tokens.access_token)
       if (cards.length > 0) {
         defaultCardId = cards[0].account_id
+        cardholderName = cards[0].name_on_card || null
+        cardDisplayName = cards[0].display_name || null
       }
     } catch (cardErr) {
       console.warn('Could not list cards immediately after connect:', cardErr.message)
@@ -150,54 +154,35 @@ router.all('/callback', async (req, res) => {
       targetFamilyId = firstFamily?.id || null
     }
 
+    const configData = {
+      accessToken: tokens.access_token,
+      refreshToken: tokens.refresh_token,
+      tokenExpiresAt,
+      consentExpiresAt,
+      isActive: true,
+      lastSyncStatus: 'CONNECTED',
+      lastSyncMessage: 'Connected to TrueLayer successfully',
+      ...(defaultCardId && { cardAccountId: defaultCardId }),
+      ...(cardholderName && { cardholderName }),
+      ...(cardDisplayName && { cardDisplayName }),
+    }
+
     if (targetFamilyId) {
       await prisma.amexAutomationConfig.upsert({
         where: { familyId: targetFamilyId },
-        update: {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          tokenExpiresAt,
-          consentExpiresAt,
-          isActive: true,
-          lastSyncStatus: 'CONNECTED',
-          lastSyncMessage: 'Connected to TrueLayer successfully',
-          ...(defaultCardId && { cardAccountId: defaultCardId }),
-        },
+        update: configData,
         create: {
           familyId: targetFamilyId,
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          tokenExpiresAt,
-          consentExpiresAt,
-          isActive: true,
-          lastSyncStatus: 'CONNECTED',
-          lastSyncMessage: 'Connected to TrueLayer successfully',
-          cardAccountId: defaultCardId,
+          ...configData
         }
       })
     } else {
       await prisma.amexAutomationConfig.upsert({
         where: { id: 'singleton' },
-        update: {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          tokenExpiresAt,
-          consentExpiresAt,
-          isActive: true,
-          lastSyncStatus: 'CONNECTED',
-          lastSyncMessage: 'Connected to TrueLayer successfully',
-          ...(defaultCardId && { cardAccountId: defaultCardId }),
-        },
+        update: configData,
         create: {
           id: 'singleton',
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          tokenExpiresAt,
-          consentExpiresAt,
-          isActive: true,
-          lastSyncStatus: 'CONNECTED',
-          lastSyncMessage: 'Connected to TrueLayer successfully',
-          cardAccountId: defaultCardId,
+          ...configData
         }
       })
     }
@@ -233,9 +218,23 @@ router.get('/cards', requireAuth, async (req, res) => {
       }
     }
 
+    // Auto-backfill cardholderName and cardDisplayName if missing
+    const activeCard = cards.find(c => c.account_id === targetCardId) || cards[0]
+    if (activeCard && (!config.cardholderName || !config.cardDisplayName)) {
+      await prisma.amexAutomationConfig.update({
+        where: { id: config.id },
+        data: {
+          cardholderName: activeCard.name_on_card || config.cardholderName,
+          cardDisplayName: activeCard.display_name || config.cardDisplayName,
+        }
+      })
+    }
+
     res.json({
       cards,
       selectedCardId: config.cardAccountId,
+      cardholderName: activeCard?.name_on_card || config.cardholderName,
+      cardDisplayName: activeCard?.display_name || config.cardDisplayName,
       balance: currentBalance,
     })
   } catch (err) {
@@ -254,7 +253,23 @@ router.post('/config', requireAuth, async (req, res) => {
     const familyId = req.user.familyId
 
     const updateData = {}
-    if (cardAccountId !== undefined) updateData.cardAccountId = cardAccountId
+    if (cardAccountId !== undefined) {
+      updateData.cardAccountId = cardAccountId
+      // Try to resolve cardholderName and cardDisplayName from cards list
+      const tokenData = await getValidAccessToken(familyId)
+      if (tokenData?.accessToken) {
+        try {
+          const cards = await getCards(tokenData.accessToken)
+          const matchedCard = cards.find(c => c.account_id === cardAccountId)
+          if (matchedCard) {
+            if (matchedCard.name_on_card) updateData.cardholderName = matchedCard.name_on_card
+            if (matchedCard.display_name) updateData.cardDisplayName = matchedCard.display_name
+          }
+        } catch (e) {
+          console.warn('Could not look up cardholder metadata:', e.message)
+        }
+      }
+    }
     if (isActive !== undefined) updateData.isActive = Boolean(isActive)
 
     let updated
