@@ -45,6 +45,9 @@ model User {
   amexGroceryShops   AmexGroceryShop[]  @relation("UserAmexGrocery")
   nonAmexExpenses    NonAmexExpense[]   @relation("UserNonAmexExpenses")
 
+  // Family module
+  familyMemberships  FamilyMember[]
+
   @@map("users")
 }
 
@@ -411,6 +414,38 @@ model NonAmexExpense {
   @@map("non_amex_expenses")
 }
 
+// ── Family & Households ────────────────────────────────────────────────────────
+
+model Family {
+  id         String   @id @default(cuid())
+  name       String   @default("My Family")
+  inviteCode String   @unique @default(cuid()) @map("invite_code")
+  createdAt  DateTime @default(now()) @map("created_at")
+  updatedAt  DateTime @updatedAt @map("updated_at")
+
+  members          FamilyMember[]
+  foodShops        SharedAmexFoodShop[]
+  exports          SharedAmexExport[]
+  state            SharedAmexState?
+  automationConfig AmexAutomationConfig?
+
+  @@map("families")
+}
+
+model FamilyMember {
+  id        String   @id @default(cuid())
+  familyId  String   @map("family_id")
+  userId    String   @map("user_id")
+  role      String   @default("MEMBER") // "OWNER" or "MEMBER"
+  createdAt DateTime @default(now()) @map("created_at")
+
+  family    Family   @relation(fields: [familyId], references: [id], onDelete: Cascade)
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, userId])
+  @@map("family_members")
+}
+
 // ── Shared Calculator ─────────────────────────────────────────────────────────
 
 model SharedAmexFoodShop {
@@ -422,20 +457,26 @@ model SharedAmexFoodShop {
   payerCoveredAmount Float    @map("payer_covered_amount")
   createdAt          DateTime @default(now()) @map("created_at")
 
+  familyId           String?  @map("family_id")
+  family             Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
   @@map("shared_amex_food_shops")
 }
 
 model SharedAmexState {
-  id                     String   @id @default("singleton")
+  id                     String   @id @default(cuid())
   partnerStatementAmount Float    @default(0) @map("partner_statement_amount")
   updatedAt              DateTime @updatedAt @map("updated_at")
+
+  familyId               String?  @unique @map("family_id")
+  family                 Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
   @@map("shared_amex_state")
 }
 
 model SharedAmexExport {
   id                     String   @id @default(cuid())
-  name                   String   @unique
+  name                   String
   partnerStatementAmount Float    @map("partner_statement_amount")
   shopsData              Json     @map("shops_data")
   partnerOwesForMyShops  Float?   @map("partner_owes_for_my_shops")
@@ -447,11 +488,15 @@ model SharedAmexExport {
   createdAt              DateTime @default(now()) @map("created_at")
   updatedAt              DateTime @updatedAt @default(now()) @map("updated_at")
 
+  familyId               String?  @map("family_id")
+  family                 Family?  @relation(fields: [familyId], references: [id], onDelete: Cascade)
+
+  @@unique([familyId, name])
   @@map("shared_amex_exports")
 }
 
 model AmexAutomationConfig {
-  id                         String    @id @default("singleton")
+  id                         String    @id @default(cuid())
   accessToken                String?   @map("access_token")
   refreshToken               String?   @map("refresh_token")
   tokenExpiresAt             DateTime? @map("token_expires_at")
@@ -468,6 +513,9 @@ model AmexAutomationConfig {
   lastSyncAt                 DateTime? @map("last_sync_at")
   lastSyncStatus             String?   @map("last_sync_status")
   lastSyncMessage            String?   @map("last_sync_message")
+
+  familyId                   String?   @unique @map("family_id")
+  family                     Family?   @relation(fields: [familyId], references: [id], onDelete: Cascade)
 
   createdAt                  DateTime  @default(now()) @map("created_at")
   updatedAt                  DateTime  @updatedAt @map("updated_at")

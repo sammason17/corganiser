@@ -1,5 +1,6 @@
 import express from 'express'
 import prisma from '../../lib/prisma.js'
+import { requireAuth } from '../../lib/auth.js'
 import {
   getAuthUrl,
   exchangeCodeForTokens,
@@ -43,11 +44,18 @@ function getAppRedirectUrl(path = '/budget') {
 
 /**
  * GET /api/truelayer/status
- * Returns current connection state
+ * Returns current connection state for the authenticated user's family
  */
-router.get('/status', async (req, res) => {
+router.get('/status', requireAuth, async (req, res) => {
   try {
-    const config = await prisma.amexAutomationConfig.findUnique({ where: { id: 'singleton' } })
+    const familyId = req.user.familyId
+    let config = null
+    if (familyId) {
+      config = await prisma.amexAutomationConfig.findUnique({ where: { familyId } })
+    }
+    if (!config) {
+      config = await prisma.amexAutomationConfig.findFirst({ where: familyId ? { familyId } : {} })
+    }
     if (!config) {
       return res.json({
         isConnected: false,
@@ -84,12 +92,13 @@ router.get('/status', async (req, res) => {
 
 /**
  * GET /api/truelayer/auth-url
- * Returns the OAuth consent URL to initiate connection
+ * Returns the OAuth consent URL to initiate connection, encoding familyId in state
  */
-router.get('/auth-url', (req, res) => {
+router.get('/auth-url', requireAuth, (req, res) => {
   try {
     const redirectUri = getRedirectUri(req)
-    const url = getAuthUrl({ redirectUri })
+    const state = req.user.familyId || ''
+    const url = getAuthUrl({ redirectUri, state })
     res.json({ url, redirectUri })
   } catch (err) {
     console.error(err)
@@ -98,13 +107,14 @@ router.get('/auth-url', (req, res) => {
 })
 
 /**
- * GET /api/truelayer/callback
+ * GET/POST /api/truelayer/callback
  * Handles OAuth callback from TrueLayer
  */
 router.all('/callback', async (req, res) => {
   const code = req.query.code || req.body?.code
   const error = req.query.error || req.body?.error
   const error_description = req.query.error_description || req.body?.error_description
+  const stateFamilyId = req.query.state || req.body?.state || null
 
   if (error) {
     console.error('[TrueLayer Callback Error]', error, error_description)
@@ -134,30 +144,63 @@ router.all('/callback', async (req, res) => {
       console.warn('Could not list cards immediately after connect:', cardErr.message)
     }
 
-    await prisma.amexAutomationConfig.upsert({
-      where: { id: 'singleton' },
-      update: {
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        tokenExpiresAt,
-        consentExpiresAt,
-        isActive: true,
-        lastSyncStatus: 'CONNECTED',
-        lastSyncMessage: 'Connected to TrueLayer successfully',
-        ...(defaultCardId && { cardAccountId: defaultCardId }),
-      },
-      create: {
-        id: 'singleton',
-        accessToken: tokens.access_token,
-        refreshToken: tokens.refresh_token,
-        tokenExpiresAt,
-        consentExpiresAt,
-        isActive: true,
-        lastSyncStatus: 'CONNECTED',
-        lastSyncMessage: 'Connected to TrueLayer successfully',
-        cardAccountId: defaultCardId,
-      }
-    })
+    let targetFamilyId = stateFamilyId
+    if (!targetFamilyId) {
+      const firstFamily = await prisma.family.findFirst()
+      targetFamilyId = firstFamily?.id || null
+    }
+
+    if (targetFamilyId) {
+      await prisma.amexAutomationConfig.upsert({
+        where: { familyId: targetFamilyId },
+        update: {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          tokenExpiresAt,
+          consentExpiresAt,
+          isActive: true,
+          lastSyncStatus: 'CONNECTED',
+          lastSyncMessage: 'Connected to TrueLayer successfully',
+          ...(defaultCardId && { cardAccountId: defaultCardId }),
+        },
+        create: {
+          familyId: targetFamilyId,
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          tokenExpiresAt,
+          consentExpiresAt,
+          isActive: true,
+          lastSyncStatus: 'CONNECTED',
+          lastSyncMessage: 'Connected to TrueLayer successfully',
+          cardAccountId: defaultCardId,
+        }
+      })
+    } else {
+      await prisma.amexAutomationConfig.upsert({
+        where: { id: 'singleton' },
+        update: {
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          tokenExpiresAt,
+          consentExpiresAt,
+          isActive: true,
+          lastSyncStatus: 'CONNECTED',
+          lastSyncMessage: 'Connected to TrueLayer successfully',
+          ...(defaultCardId && { cardAccountId: defaultCardId }),
+        },
+        create: {
+          id: 'singleton',
+          accessToken: tokens.access_token,
+          refreshToken: tokens.refresh_token,
+          tokenExpiresAt,
+          consentExpiresAt,
+          isActive: true,
+          lastSyncStatus: 'CONNECTED',
+          lastSyncMessage: 'Connected to TrueLayer successfully',
+          cardAccountId: defaultCardId,
+        }
+      })
+    }
 
     return res.redirect(getAppRedirectUrl('/budget?truelayer=connected'))
   } catch (err) {
@@ -168,11 +211,11 @@ router.all('/callback', async (req, res) => {
 
 /**
  * GET /api/truelayer/cards
- * Lists available cards and recent supplementary card IDs detected
+ * Lists available cards for the authenticated family
  */
-router.get('/cards', async (req, res) => {
+router.get('/cards', requireAuth, async (req, res) => {
   try {
-    const tokenData = await getValidAccessToken()
+    const tokenData = await getValidAccessToken(req.user.familyId)
     if (!tokenData) {
       return res.status(401).json({ error: 'TrueLayer is not connected' })
     }
@@ -203,21 +246,31 @@ router.get('/cards', async (req, res) => {
 
 /**
  * POST /api/truelayer/config
- * Update card account selection or active status
+ * Update card account selection or active status for family
  */
-router.post('/config', async (req, res) => {
+router.post('/config', requireAuth, async (req, res) => {
   try {
     const { cardAccountId, isActive } = req.body
+    const familyId = req.user.familyId
 
     const updateData = {}
     if (cardAccountId !== undefined) updateData.cardAccountId = cardAccountId
     if (isActive !== undefined) updateData.isActive = Boolean(isActive)
 
-    const updated = await prisma.amexAutomationConfig.upsert({
-      where: { id: 'singleton' },
-      update: updateData,
-      create: { id: 'singleton', ...updateData }
-    })
+    let updated
+    if (familyId) {
+      updated = await prisma.amexAutomationConfig.upsert({
+        where: { familyId },
+        update: updateData,
+        create: { familyId, ...updateData }
+      })
+    } else {
+      updated = await prisma.amexAutomationConfig.upsert({
+        where: { id: 'singleton' },
+        update: updateData,
+        create: { id: 'singleton', ...updateData }
+      })
+    }
 
     res.json(updated)
   } catch (err) {
@@ -228,12 +281,12 @@ router.post('/config', async (req, res) => {
 
 /**
  * POST /api/truelayer/sync-now
- * Runs an on-demand settlement sync
+ * Runs an on-demand settlement sync for the authenticated user's family
  */
-router.post('/sync-now', async (req, res) => {
+router.post('/sync-now', requireAuth, async (req, res) => {
   try {
     const force = Boolean(req.body?.force || req.query?.force === 'true')
-    const result = await checkAndRunStatementSettlement({ force })
+    const result = await checkAndRunStatementSettlement({ force, familyId: req.user.familyId })
     res.json(result)
   } catch (err) {
     console.error(err)
@@ -243,27 +296,43 @@ router.post('/sync-now', async (req, res) => {
 
 /**
  * POST /api/truelayer/disconnect
- * Disconnects TrueLayer and removes tokens
+ * Disconnects TrueLayer and removes tokens for the family
  */
-router.post('/disconnect', async (req, res) => {
+router.post('/disconnect', requireAuth, async (req, res) => {
   try {
-    await prisma.amexAutomationConfig.upsert({
-      where: { id: 'singleton' },
-      update: {
-        accessToken: null,
-        refreshToken: null,
-        tokenExpiresAt: null,
-        consentExpiresAt: null,
-        isActive: false,
-        lastSyncStatus: 'DISCONNECTED',
-        lastSyncMessage: 'Disconnected by user',
-      },
-      create: {
-        id: 'singleton',
-        isActive: false,
-        lastSyncStatus: 'DISCONNECTED'
-      }
-    })
+    const familyId = req.user.familyId
+    if (familyId) {
+      await prisma.amexAutomationConfig.updateMany({
+        where: { familyId },
+        data: {
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiresAt: null,
+          consentExpiresAt: null,
+          isActive: false,
+          lastSyncStatus: 'DISCONNECTED',
+          lastSyncMessage: 'Disconnected by user',
+        }
+      })
+    } else {
+      await prisma.amexAutomationConfig.upsert({
+        where: { id: 'singleton' },
+        update: {
+          accessToken: null,
+          refreshToken: null,
+          tokenExpiresAt: null,
+          consentExpiresAt: null,
+          isActive: false,
+          lastSyncStatus: 'DISCONNECTED',
+          lastSyncMessage: 'Disconnected by user',
+        },
+        create: {
+          id: 'singleton',
+          isActive: false,
+          lastSyncStatus: 'DISCONNECTED'
+        }
+      })
+    }
     res.json({ message: 'Disconnected' })
   } catch (err) {
     console.error(err)

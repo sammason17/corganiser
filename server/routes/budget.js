@@ -419,14 +419,26 @@ router.delete('/non-amex/:id', async (req, res) => {
   }
 })
 
-// ── SHARED AMEX CALCULATOR ────────────────────────────────────────────────────
+// ── SHARED CREDIT CARD CALCULATOR ──────────────────────────────────────────────
 
 router.get('/calculator/state', async (req, res) => {
   try {
-    const shops = await prisma.sharedAmexFoodShop.findMany({ orderBy: { date: 'asc' } })
-    const state = await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
+    const familyId = req.user.familyId
+    const shops = await prisma.sharedAmexFoodShop.findMany({
+      where: familyId ? { familyId } : {},
+      orderBy: { date: 'asc' }
+    })
+    let state = familyId ? await prisma.sharedAmexState.findUnique({ where: { familyId } }) : null
+    if (!state && familyId) {
+      state = await prisma.sharedAmexState.create({
+        data: { familyId, partnerStatementAmount: 0 }
+      })
+    } else if (!state) {
+      state = await prisma.sharedAmexState.findFirst()
+    }
     res.json({ shops, partnerStatementAmount: state?.partnerStatementAmount || 0 })
   } catch (err) {
+    console.error('[Calculator State Error]', err)
     res.status(500).json({ error: 'Server error' })
   }
 })
@@ -441,34 +453,53 @@ router.post('/calculator/shops', async (req, res) => {
         date: date ? new Date(date) : new Date(),
         totalAmount: Number(totalAmount) || 0,
         payerName: payerName || 'Me',
-        payerCoveredAmount: Number(payerCoveredAmount) || 0
+        payerCoveredAmount: Number(payerCoveredAmount) || 0,
+        familyId: req.user.familyId || null
       }
     })
     res.status(201).json(item)
   } catch (err) {
+    console.error('[Create Shop Error]', err)
     res.status(500).json({ error: 'Server error' })
   }
 })
 
 router.delete('/calculator/shops/:id', async (req, res) => {
   try {
-    await prisma.sharedAmexFoodShop.delete({ where: { id: req.params.id } })
+    const where = { id: req.params.id }
+    if (req.user.familyId) {
+      where.familyId = req.user.familyId
+    }
+    await prisma.sharedAmexFoodShop.delete({ where })
     res.json({ message: 'Deleted' })
   } catch (err) {
+    console.error('[Delete Shop Error]', err)
     res.status(500).json({ error: 'Server error' })
   }
 })
 
 router.delete('/calculator/shops', async (req, res) => {
   try {
-    await prisma.sharedAmexFoodShop.deleteMany({})
-    await prisma.sharedAmexState.upsert({
-      where: { id: 'singleton' },
-      update: { partnerStatementAmount: 0 },
-      create: { id: 'singleton', partnerStatementAmount: 0 }
+    const familyId = req.user.familyId
+    await prisma.sharedAmexFoodShop.deleteMany({
+      where: familyId ? { familyId } : {}
     })
+    if (familyId) {
+      await prisma.sharedAmexState.upsert({
+        where: { familyId },
+        update: { partnerStatementAmount: 0 },
+        create: { familyId, partnerStatementAmount: 0 }
+      })
+    } else {
+      await prisma.sharedAmexState.upsert({
+        where: { id: 'singleton' },
+        update: { partnerStatementAmount: 0 },
+        create: { id: 'singleton', partnerStatementAmount: 0 }
+      })
+    }
     res.json({ message: 'Cleared' })
   } catch (err) {
+    console.error('[Clear Shops Error]', err)
     res.status(500).json({ error: 'Server error' })
   }
 })
@@ -476,75 +507,107 @@ router.delete('/calculator/shops', async (req, res) => {
 router.put('/calculator/statement', async (req, res) => {
   try {
     const { amount } = req.body
-    const state = await prisma.sharedAmexState.upsert({
-      where: { id: 'singleton' },
-      update: { partnerStatementAmount: Number(amount) || 0 },
-      create: { id: 'singleton', partnerStatementAmount: Number(amount) || 0 }
-    })
+    const familyId = req.user.familyId
+    let state
+    if (familyId) {
+      state = await prisma.sharedAmexState.upsert({
+        where: { familyId },
+        update: { partnerStatementAmount: Number(amount) || 0 },
+        create: { familyId, partnerStatementAmount: Number(amount) || 0 }
+      })
+    } else {
+      state = await prisma.sharedAmexState.upsert({
+        where: { id: 'singleton' },
+        update: { partnerStatementAmount: Number(amount) || 0 },
+        create: { id: 'singleton', partnerStatementAmount: Number(amount) || 0 }
+      })
+    }
     res.json(state)
   } catch (err) {
+    console.error('[Update Statement Error]', err)
     res.status(500).json({ error: 'Server error' })
   }
 })
 
 router.get('/calculator/next-export-name', async (req, res) => {
   try {
-    const nextName = await getUniqueExportName()
+    const nextName = await getUniqueExportName(new Date(), req.user.familyId)
     res.json({ nextName })
   } catch (err) {
+    console.error('[Next Export Name Error]', err)
     res.status(500).json({ error: 'Server error' })
   }
 })
 
 router.get('/calculator/exports', async (req, res) => {
   try {
-    const exports = await prisma.sharedAmexExport.findMany({ orderBy: { createdAt: 'desc' } })
+    const familyId = req.user.familyId
+    const exports = await prisma.sharedAmexExport.findMany({
+      where: familyId ? { familyId } : {},
+      orderBy: { createdAt: 'desc' }
+    })
     res.json(exports)
   } catch (err) {
+    console.error('[Get Exports Error]', err)
     res.status(500).json({ error: 'Server error' })
   }
 })
 
 router.post('/calculator/exports', async (req, res) => {
   try {
+    const familyId = req.user.familyId
     let { name } = req.body
     if (!name) {
-      name = await getUniqueExportName()
+      name = await getUniqueExportName(new Date(), familyId)
     } else {
-      const existing = await prisma.sharedAmexExport.findUnique({ where: { name } })
+      const existing = await prisma.sharedAmexExport.findFirst({
+        where: {
+          name,
+          ...(familyId ? { familyId } : {})
+        }
+      })
       if (existing) {
-        // Automatically find next available increment if duplicate
-        name = await getUniqueExportName()
+        name = await getUniqueExportName(new Date(), familyId)
       }
     }
 
-    const shops = await prisma.sharedAmexFoodShop.findMany({ orderBy: { date: 'asc' } })
-    const state = await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
+    const shops = await prisma.sharedAmexFoodShop.findMany({
+      where: familyId ? { familyId } : {},
+      orderBy: { date: 'asc' }
+    })
+    const state = familyId
+      ? await prisma.sharedAmexState.findUnique({ where: { familyId } })
+      : await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
     const partnerStatementAmount = state?.partnerStatementAmount || 0
 
     const newExport = await prisma.sharedAmexExport.create({
       data: {
         name,
         partnerStatementAmount,
-        shopsData: shops
+        shopsData: shops,
+        familyId: familyId || null
       }
     })
     res.status(201).json(newExport)
   } catch (err) {
-    console.error(err)
+    console.error('[Create Export Error]', err)
     res.status(500).json({ error: 'Server error' })
   }
 })
 
 router.post('/calculator/settle', async (req, res) => {
   try {
+    const familyId = req.user.familyId
     const { partnerStatementAmount, name } = req.body
-    const state = await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
+    const state = familyId
+      ? await prisma.sharedAmexState.findUnique({ where: { familyId } })
+      : await prisma.sharedAmexState.findUnique({ where: { id: 'singleton' } })
     const finalPartnerStatement = partnerStatementAmount !== undefined 
       ? Number(partnerStatementAmount) 
       : (state?.partnerStatementAmount || 0)
 
     const result = await executeSettlementExportAndClear({
+      familyId,
       partnerStatementAmount: finalPartnerStatement,
       autoExported: false,
       customName: name || null,

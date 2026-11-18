@@ -3,7 +3,7 @@ import {
   Wallet, PieChart as PieChartIcon, CreditCard, Plus, Trash2, 
   PoundSterling, ShoppingCart, Repeat, Landmark, Pencil, GripVertical, Calculator,
   Mail, RefreshCw, CheckCircle2, Settings2, ShieldCheck, Unlink, Sparkles,
-  ChevronDown, ChevronUp, Edit3, AlertTriangle
+  ChevronDown, ChevronUp, Edit3, AlertTriangle, Users, Copy, UserCheck, Shield
 } from 'lucide-react';
 import { DragDropContext, Droppable, Draggable } from '@hello-pangea/dnd';
 import { motion, AnimatePresence } from 'motion/react';
@@ -21,9 +21,90 @@ export default function BudgetDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  // Family State
+  const [familyInfo, setFamilyInfo] = useState(null);
+  const [showFamilyModal, setShowFamilyModal] = useState(false);
+  const [copiedInvite, setCopiedInvite] = useState(false);
+  const [joinCodeInput, setJoinCodeInput] = useState('');
+  const [isJoining, setIsJoining] = useState(false);
+  const [editingFamilyName, setEditingFamilyName] = useState(false);
+  const [familyNameInput, setFamilyNameInput] = useState('');
+  const [isRenaming, setIsRenaming] = useState(false);
+
   useEffect(() => {
     fetchData();
+    fetchFamily();
   }, []);
+
+  const fetchFamily = async () => {
+    try {
+      const res = await api.getFamilyCurrent();
+      setFamilyInfo(res);
+      setFamilyNameInput(res.family?.name || '');
+    } catch (err) {
+      console.warn('Could not fetch family:', err);
+    }
+  };
+
+  const handleCopyInvite = () => {
+    if (!familyInfo?.family?.inviteCode) return;
+    navigator.clipboard.writeText(familyInfo.family.inviteCode);
+    setCopiedInvite(true);
+    setTimeout(() => setCopiedInvite(false), 2500);
+  };
+
+  const handleRegenerateInvite = async () => {
+    if (!window.confirm('Regenerate family invite code? The old code will immediately stop working.')) return;
+    try {
+      const res = await api.regenerateFamilyInviteCode();
+      setFamilyInfo(prev => ({ ...prev, family: { ...prev.family, inviteCode: res.inviteCode } }));
+      alert('New invite code generated!');
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Failed to regenerate invite code');
+    }
+  };
+
+  const handleSaveFamilyName = async (e) => {
+    e.preventDefault();
+    if (!familyNameInput.trim()) return;
+    setIsRenaming(true);
+    try {
+      const res = await api.renameFamily(familyNameInput.trim());
+      setFamilyInfo(prev => ({ ...prev, family: { ...prev.family, name: res.name } }));
+      setEditingFamilyName(false);
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Failed to rename family');
+    } finally {
+      setIsRenaming(false);
+    }
+  };
+
+  const handleJoinFamily = async (e) => {
+    e.preventDefault();
+    if (!joinCodeInput.trim()) return;
+    setIsJoining(true);
+    try {
+      await api.joinFamily(joinCodeInput.trim().toUpperCase());
+      alert('Successfully joined family!');
+      setJoinCodeInput('');
+      await fetchFamily();
+      await fetchData();
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Failed to join family');
+    } finally {
+      setIsJoining(false);
+    }
+  };
+
+  const handleRemoveMember = async (userId, memberName) => {
+    if (!window.confirm(`Remove ${memberName} from this family? They will no longer have access to shared cards or settlements.`)) return;
+    try {
+      await api.removeFamilyMember(userId);
+      await fetchFamily();
+    } catch (err) {
+      alert(err.response?.data?.error || err.message || 'Failed to remove member');
+    }
+  };
 
   const fetchData = async () => {
     setError(null);
@@ -136,6 +217,20 @@ export default function BudgetDashboard() {
           </div>
           <span className="text-xl font-bold tracking-tight">Budget & Finances</span>
         </div>
+
+        <button
+          onClick={() => setShowFamilyModal(true)}
+          className="flex items-center gap-2 text-xs font-bold text-slate-700 bg-slate-100 hover:bg-slate-200 px-3.5 py-2 rounded-xl border border-slate-200 transition-colors shadow-sm"
+          title="Household and Family Sharing Settings"
+        >
+          <Users size={15} className="text-indigo-600" />
+          <span>{familyInfo?.family?.name || 'Household'}</span>
+          {familyInfo?.family?.members?.length > 0 && (
+            <span className="text-[10px] bg-white text-indigo-700 px-1.5 py-0.5 rounded-full border border-indigo-200 font-mono font-bold">
+              {familyInfo.family.members.length} {familyInfo.family.members.length === 1 ? 'member' : 'members'}
+            </span>
+          )}
+        </button>
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 md:p-8">
@@ -214,15 +309,15 @@ export default function BudgetDashboard() {
             </Card>
 
             <Card title="Personal Monthly Expenses" icon={<ShoppingCart size={14} />}>
-               <p className="text-xs text-slate-500 mb-4 font-medium">Add daily spending estimates. Mark as 'Amex' to add to your credit card projection.</p>
+               <p className="text-xs text-slate-500 mb-4 font-medium">Add daily spending estimates. Mark as 'Credit Card' to add to your credit card projection.</p>
                <ExpenseList data={data.expenses} categories={data.categories} refresh={fetchData} />
             </Card>
           </div>
 
-          {/* 1. Amex Statement Calculator (Shared Settlement) */}
+          {/* 1. Shared Credit Card Statement Calculator (Shared Settlement) */}
           <AmexStatementCalculator />
 
-          {/* 2. Amex Credit Card Projection */}
+          {/* 2. Credit Card Projection */}
           <div className="bg-indigo-950 rounded-[2rem] p-8 text-white shadow-xl overflow-hidden relative">
             <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
             
@@ -230,13 +325,13 @@ export default function BudgetDashboard() {
               <div className="flex items-center gap-3">
                 <CreditCard size={28} className="text-indigo-400" />
                 <div>
-                  <h2 className="text-2xl font-black tracking-tight">Amex Credit Card Projection</h2>
+                  <h2 className="text-2xl font-black tracking-tight">Credit Card Projection</h2>
                   <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mt-1">Expected Statement Tracker</p>
                 </div>
               </div>
               <div className="bg-white/10 rounded-xl p-3 border border-white/20 flex items-center gap-3 shadow-inner">
                 <div>
-                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest">Monthly Allowance</p>
+                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest">Credit Card Allowance</p>
                   <p className="text-xs text-indigo-200">Base budget limit</p>
                 </div>
                 <div className="relative">
@@ -255,7 +350,7 @@ export default function BudgetDashboard() {
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
               <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
                 <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
-                  <Repeat size={12} /> Recurring Amex Payments
+                  <Repeat size={12} /> Recurring Credit Card Payments
                 </h3>
                 <AmexRecurringList data={data.amexRecurring} refresh={fetchData} amexExpenses={data.expenses.filter(e => e.isAmex)} />
               </div>
@@ -263,10 +358,10 @@ export default function BudgetDashboard() {
               <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
                 <div className="flex items-center justify-between mb-4">
                   <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-300 flex items-center gap-2">
-                    <Wallet size={12} /> Non-Amex Expenses
+                    <Wallet size={12} /> Non-Card Expenses
                   </h3>
                   {data.nonAmexExpenses?.length > 0 && (
-                    <button onClick={() => { if(window.confirm('Clear all non-amex expenses?')) { api.clearNonAmex().then(fetchData) } }} className="text-[9px] text-rose-400 hover:text-white font-bold uppercase tracking-widest bg-rose-400/10 hover:bg-rose-500/50 px-2 py-1 rounded transition-colors">
+                    <button onClick={() => { if(window.confirm('Clear all non-card expenses?')) { api.clearNonAmex().then(fetchData) } }} className="text-[9px] text-rose-400 hover:text-white font-bold uppercase tracking-widest bg-rose-400/10 hover:bg-rose-500/50 px-2 py-1 rounded transition-colors">
                       Clear All
                     </button>
                   )}
@@ -295,7 +390,7 @@ export default function BudgetDashboard() {
                 <div>
                   <p className="text-red-300 font-black text-xs uppercase tracking-widest">Budget exceeded!</p>
                   <p className="text-red-200 text-xs mt-1">
-                    Your day-to-day spend (grocery + non-amex) is <span className="font-bold">{formatCurrency(myDayToDaySpend)}</span>, which exceeds your day-to-day limit of <span className="font-bold">{formatCurrency(effectiveDayToDayBudget)}</span> by <span className="font-bold text-red-400">{formatCurrency(overspendAmount)}</span>.
+                    Your day-to-day spend (grocery + non-card) is <span className="font-bold">{formatCurrency(myDayToDaySpend)}</span>, which exceeds your day-to-day limit of <span className="font-bold">{formatCurrency(effectiveDayToDayBudget)}</span> by <span className="font-bold text-red-400">{formatCurrency(overspendAmount)}</span>.
                   </p>
                 </div>
               </div>
@@ -324,7 +419,7 @@ export default function BudgetDashboard() {
                 </div>
                 {totalAmexExpenses > 0 && (
                   <div className="flex justify-between text-xs text-indigo-200 mb-2">
-                    <span>Fixed Amex expenses</span>
+                    <span>Fixed Card expenses</span>
                     <span className="font-mono">{formatCurrency(totalAmexExpenses)}</span>
                   </div>
                 )}
@@ -334,7 +429,7 @@ export default function BudgetDashboard() {
                 </div>
                 {totalNonAmex > 0 && (
                   <div className="flex justify-between text-xs text-rose-300">
-                    <span>Non-Amex spend</span>
+                    <span>Non-Card spend</span>
                     <span className="font-mono">+{formatCurrency(totalNonAmex)}</span>
                   </div>
                 )}
@@ -343,7 +438,7 @@ export default function BudgetDashboard() {
                   <span className="font-mono">{formatCurrency(totalAmexGroceryFull)}</span>
                 </div>
                 <div className="flex justify-between text-xs text-emerald-300 border-t border-white/10 pt-2">
-                  <span>↳ My day-to-day spend (grocery + non-amex)</span>
+                  <span>↳ My day-to-day spend (grocery + non-card)</span>
                   <span className="font-mono">{formatCurrency(myDayToDaySpend)} of {formatCurrency(effectiveDayToDayBudget)} limit</span>
                 </div>
               </div>
@@ -353,6 +448,175 @@ export default function BudgetDashboard() {
 
         </div>
       </div>
+
+      {/* Family Sharing Modal */}
+      {showFamilyModal && familyInfo?.family && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl max-w-lg w-full p-6 sm:p-8 shadow-2xl border border-slate-200 text-slate-800 relative">
+            <div className="flex items-center justify-between pb-4 mb-5 border-b border-slate-100">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-2xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+                  <Users size={20} />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black tracking-tight text-slate-900">Household & Family Sharing</h3>
+                  <p className="text-xs text-slate-500">Shared cards, food shops, and settlement emails</p>
+                </div>
+              </div>
+              <button
+                onClick={() => setShowFamilyModal(false)}
+                className="text-slate-400 hover:text-slate-600 text-lg font-bold p-1 rounded-lg hover:bg-slate-100"
+              >
+                ✕
+              </button>
+            </div>
+
+            <div className="space-y-6">
+              {/* Family Name */}
+              <div className="bg-slate-50 rounded-2xl p-4 border border-slate-200/80">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">Family Name</span>
+                  {familyInfo.isOwner && !editingFamilyName && (
+                    <button
+                      onClick={() => setEditingFamilyName(true)}
+                      className="text-xs text-indigo-600 hover:text-indigo-700 font-bold flex items-center gap-1"
+                    >
+                      <Pencil size={11} /> Rename
+                    </button>
+                  )}
+                </div>
+
+                {editingFamilyName ? (
+                  <form onSubmit={handleSaveFamilyName} className="flex gap-2 mt-2">
+                    <input
+                      type="text"
+                      value={familyNameInput}
+                      onChange={e => setFamilyNameInput(e.target.value)}
+                      className="flex-1 bg-white border border-slate-300 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-800 outline-none focus:border-indigo-500"
+                    />
+                    <button
+                      type="submit"
+                      disabled={isRenaming}
+                      className="bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-3 py-1.5 rounded-lg disabled:opacity-50"
+                    >
+                      {isRenaming ? 'Saving...' : 'Save'}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => { setEditingFamilyName(false); setFamilyNameInput(familyInfo.family.name); }}
+                      className="text-slate-500 hover:text-slate-700 text-xs px-2 py-1.5"
+                    >
+                      Cancel
+                    </button>
+                  </form>
+                ) : (
+                  <p className="text-base font-black text-slate-900 tracking-tight">{familyInfo.family.name}</p>
+                )}
+              </div>
+
+              {/* Invite Code Box */}
+              <div className="bg-indigo-50/70 border border-indigo-100 rounded-2xl p-4">
+                <div className="flex items-center justify-between mb-2">
+                  <span className="text-[10px] font-bold uppercase tracking-wider text-indigo-700">Family Invite Code</span>
+                  <span className="text-[11px] text-indigo-500">Share with household members</span>
+                </div>
+                <div className="flex items-center justify-between bg-white rounded-xl p-3 border border-indigo-200/70 shadow-sm">
+                  <span className="font-mono text-lg font-black tracking-widest text-indigo-950">
+                    {familyInfo.family.inviteCode}
+                  </span>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={handleCopyInvite}
+                      className="flex items-center gap-1.5 text-xs font-bold bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-1.5 rounded-lg transition-colors shadow-sm"
+                    >
+                      <Copy size={13} />
+                      {copiedInvite ? 'Copied!' : 'Copy Code'}
+                    </button>
+                    {familyInfo.isOwner && (
+                      <button
+                        onClick={handleRegenerateInvite}
+                        title="Regenerate invite code"
+                        className="text-slate-400 hover:text-slate-600 p-1.5 rounded-lg border border-slate-200 hover:bg-slate-50 transition-colors"
+                      >
+                        <RefreshCw size={13} />
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {/* Members List */}
+              <div>
+                <h4 className="text-xs font-bold uppercase tracking-wider text-slate-500 mb-3">
+                  Family Members ({familyInfo.family.members?.length || 0})
+                </h4>
+                <div className="space-y-2 max-h-48 overflow-y-auto">
+                  {familyInfo.family.members?.map(m => (
+                    <div
+                      key={m.id}
+                      className="flex items-center justify-between p-3 bg-slate-50 rounded-xl border border-slate-100"
+                    >
+                      <div className="flex items-center gap-3">
+                        <div className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 font-bold text-xs flex items-center justify-center">
+                          {m.user.name?.charAt(0)?.toUpperCase() || 'U'}
+                        </div>
+                        <div>
+                          <p className="text-xs font-bold text-slate-900 leading-tight">
+                            {m.user.name} {m.userId === familyInfo.currentUserId && <span className="text-slate-400 font-normal">(You)</span>}
+                          </p>
+                          <p className="text-[10px] text-slate-400 font-medium">{m.user.email}</p>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className={`text-[9px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full ${
+                          m.role === 'OWNER' 
+                            ? 'bg-indigo-100 text-indigo-700 border border-indigo-200' 
+                            : 'bg-slate-200 text-slate-600'
+                        }`}>
+                          {m.role}
+                        </span>
+                        {familyInfo.isOwner && m.userId !== familyInfo.currentUserId && (
+                          <button
+                            onClick={() => handleRemoveMember(m.userId, m.user.name)}
+                            className="text-slate-400 hover:text-rose-500 p-1 rounded hover:bg-slate-100 transition-colors"
+                            title="Remove member"
+                          >
+                            <Trash2 size={13} />
+                          </button>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Join another family */}
+              <div className="pt-3 border-t border-slate-100">
+                <p className="text-[11px] font-bold uppercase tracking-wider text-slate-500 mb-2">
+                  Join a Different Family
+                </p>
+                <form onSubmit={handleJoinFamily} className="flex gap-2">
+                  <input
+                    type="text"
+                    placeholder="Enter Invite Code (e.g. FAM-XYZ123)"
+                    value={joinCodeInput}
+                    onChange={e => setJoinCodeInput(e.target.value)}
+                    className="flex-1 bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-xs font-mono font-bold uppercase placeholder:normal-case placeholder:font-sans outline-none focus:border-indigo-500 focus:bg-white"
+                  />
+                  <button
+                    type="submit"
+                    disabled={isJoining || !joinCodeInput.trim()}
+                    className="bg-slate-900 hover:bg-slate-800 text-white text-xs font-bold px-4 py-2 rounded-xl transition-colors disabled:opacity-50"
+                  >
+                    {isJoining ? 'Joining...' : 'Join'}
+                  </button>
+                </form>
+              </div>
+
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
@@ -636,7 +900,7 @@ function ExpenseList({ data, categories, refresh }) {
                             <input type="number" value={editForm.amount} onChange={ev=>setEditForm({...editForm, amount: ev.target.value})} className="w-16 bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="£" />
                             <label className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-500">
                               <input type="checkbox" checked={editForm.isAmex} onChange={ev=>setEditForm({...editForm, isAmex: ev.target.checked})} />
-                              Amex
+                              Credit Card
                             </label>
                             <select value={editForm.categoryId} onChange={ev=>setEditForm({...editForm, categoryId: ev.target.value})} className="bg-white text-xs px-1 py-1 rounded border border-slate-200 outline-none">
                               <option value="">None</option>
@@ -649,7 +913,7 @@ function ExpenseList({ data, categories, refresh }) {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-bold text-slate-700">{e.name}</span>
-                              {e.isAmex && <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Amex</span>}
+                              {e.isAmex && <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Credit Card</span>}
                             </div>
                             {e.category && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{e.category.name}</span>}
                           </div>
@@ -684,7 +948,7 @@ function ExpenseList({ data, categories, refresh }) {
         <input placeholder="£" type="number" value={amount} onChange={e=>setAmount(e.target.value)} className="w-20 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none" />
         <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500 bg-slate-50 px-2 rounded-lg border border-slate-200 cursor-pointer">
           <input type="checkbox" checked={isAmex} onChange={e=>setIsAmex(e.target.checked)} />
-          Amex
+          Credit Card
         </label>
         <select value={categoryId} onChange={e=>setCategoryId(e.target.value)} className="bg-slate-50 text-xs px-2 py-2 rounded-lg border border-slate-200 outline-none">
           <option value="">Category</option>
@@ -925,7 +1189,7 @@ function AmexStatementCalculator() {
     // Check for OAuth redirect return
     const params = new URLSearchParams(window.location.search);
     if (params.get('truelayer') === 'connected') {
-      alert('American Express connected successfully via TrueLayer!');
+      alert('Credit card connected successfully via TrueLayer!');
       window.history.replaceState({}, '', window.location.pathname);
       fetchTlStatus();
     } else if (params.get('truelayer') === 'error') {
@@ -979,7 +1243,7 @@ function AmexStatementCalculator() {
       } else if (res.status === 'ALREADY_PROCESSED') {
         alert(`Statement for ${res.lastStatementDate} has already been settled and exported.`);
       } else if (res.status === 'AWAITING_NEW_STATEMENT') {
-        alert(res.message || `Current cycle has not closed yet. Awaiting Amex statement closing date.`);
+        alert(res.message || `Current cycle has not closed yet. Awaiting statement closing date.`);
       } else {
         alert(`Status: ${res.status} - ${res.message || 'Checked'}`);
       }
@@ -992,7 +1256,7 @@ function AmexStatementCalculator() {
   };
 
   const handleDisconnect = async () => {
-    if (!window.confirm('Disconnect TrueLayer from American Express?')) return;
+    if (!window.confirm('Disconnect TrueLayer from Credit Card account?')) return;
     try {
       await api.disconnectTrueLayer();
       alert('TrueLayer disconnected.');
@@ -1132,7 +1396,7 @@ function AmexStatementCalculator() {
           <div>
             <div className="flex items-center gap-2">
               <span className="text-xs font-bold uppercase tracking-wider text-white">
-                {tlStatus?.isConnected ? 'Amex Live Sync (TrueLayer)' : 'Amex Automation'}
+                {tlStatus?.isConnected ? 'Account Live Sync (TrueLayer)' : 'Account Automation'}
               </span>
               {tlStatus?.consentDaysRemaining !== null && (
                 <span className="text-[10px] font-mono bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded-full border border-blue-500/30">
@@ -1143,7 +1407,7 @@ function AmexStatementCalculator() {
             <p className="text-[11px] text-slate-400">
               {tlStatus?.isConnected
                 ? `Auto-settles on 24th (Statement 20th–19th) • Last settled: ${tlStatus.lastProcessedStatementDate || 'None this cycle'}`
-                : 'Connect American Express to automatically populate Lauren\'s statement and settle monthly'}
+                : 'Connect credit card to automatically populate Lauren\'s statement and settle monthly'}
             </p>
           </div>
         </div>
@@ -1173,7 +1437,7 @@ function AmexStatementCalculator() {
               className="flex items-center gap-1.5 text-[10px] text-white font-bold uppercase tracking-widest bg-gradient-to-r from-blue-600 to-indigo-600 hover:from-blue-500 hover:to-indigo-500 px-3 py-1.5 rounded-lg shadow-md transition-all"
             >
               <CreditCard size={12} />
-              Connect Amex
+              Connect Card Account
             </button>
           )}
         </div>
@@ -1235,7 +1499,7 @@ function AmexStatementCalculator() {
               <Calculator size={22} />
             </div>
             <div>
-              <h2 className="text-xl font-black tracking-tight">Amex Statement Calculator</h2>
+              <h2 className="text-xl font-black tracking-tight">Shared Credit Card Statement Calculator</h2>
               <p className="text-slate-400 text-xs">Shared Food Shops & Monthly Settlement Breakdown</p>
             </div>
           </div>

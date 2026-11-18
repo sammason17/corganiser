@@ -193,3 +193,26 @@ export async function disconnectTrueLayer() {
   return data
 }
 
+// ── Family Management ────────────────────────────────────────────────────────
+export async function getFamilyCurrent() {
+  const { data } = await api.get('/family/current')
+  return data
+}
+export async function joinFamily(inviteCode) {
+  const { data } = await api.post('/family/join', { inviteCode })
+  return data
+}
+export async function renameFamily(name) {
+  const { data } = await api.put('/family/name', { name })
+  return data
+}
+export async function regenerateFamilyInviteCode() {
+  const { data } = await api.post('/family/invite-code/regenerate')
+  return data
+}
+export async function removeFamilyMember(userId) {
+  const { data } = await api.delete(`/family/members/${userId}`)
+  return data
+}
+
+
