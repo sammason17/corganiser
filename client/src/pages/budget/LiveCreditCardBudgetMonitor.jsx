@@ -48,12 +48,16 @@ export default function LiveCreditCardBudgetMonitor({
     // Primary
     cardAccountId: '',
     cardDisplayName: 'Primary Card',
+    statementDateType: 'FIXED_DAY',
+    statementDaysBeforePayment: 14,
     statementClosingDay: 19,
     paymentDueDay: 1,
     lastStatementAmount: '',
     // Secondary
     secondaryCardAccountId: '',
     secondaryCardDisplayName: 'Secondary Card',
+    secondaryStatementDateType: 'FIXED_DAY',
+    secondaryStatementDaysBeforePayment: 14,
     secondaryStatementClosingDay: 19,
     secondaryPaymentDueDay: 1,
     secondaryLastStatementAmount: ''
@@ -185,11 +189,15 @@ export default function LiveCreditCardBudgetMonitor({
       setConfigForm({
         cardAccountId: status.primary?.cardAccountId || '',
         cardDisplayName: status.primary?.cardDisplayName || 'Primary Card',
+        statementDateType: status.primary?.statementDateType || 'FIXED_DAY',
+        statementDaysBeforePayment: status.primary?.statementDaysBeforePayment ?? 14,
         statementClosingDay: status.primary?.statementClosingDay ?? 19,
         paymentDueDay: status.primary?.paymentDueDay ?? 1,
         lastStatementAmount: status.primary?.lastStatementAmount ?? '',
         secondaryCardAccountId: status.secondary?.cardAccountId || '',
         secondaryCardDisplayName: status.secondary?.cardDisplayName || 'Secondary Card',
+        secondaryStatementDateType: status.secondary?.statementDateType || 'FIXED_DAY',
+        secondaryStatementDaysBeforePayment: status.secondary?.statementDaysBeforePayment ?? 14,
         secondaryStatementClosingDay: status.secondary?.statementClosingDay ?? 19,
         secondaryPaymentDueDay: status.secondary?.paymentDueDay ?? 1,
         secondaryLastStatementAmount: status.secondary?.lastStatementAmount ?? ''
@@ -248,11 +256,15 @@ export default function LiveCreditCardBudgetMonitor({
       await api.updateTrueLayerConfig({
         primaryCardAccountId: configForm.cardAccountId || null,
         primaryCardDisplayName: configForm.cardDisplayName,
+        statementDateType: configForm.statementDateType,
+        statementDaysBeforePayment: Number(configForm.statementDaysBeforePayment) || 14,
         statementClosingDay: Number(configForm.statementClosingDay) || 19,
         paymentDueDay: Number(configForm.paymentDueDay) || 1,
         lastStatementAmount: Number(configForm.lastStatementAmount) || 0,
         secondaryCardAccountId: configForm.secondaryCardAccountId || null,
         secondaryCardDisplayName: configForm.secondaryCardDisplayName,
+        secondaryStatementDateType: configForm.secondaryStatementDateType,
+        secondaryStatementDaysBeforePayment: Number(configForm.secondaryStatementDaysBeforePayment) || 14,
         secondaryStatementClosingDay: Number(configForm.secondaryStatementClosingDay) || 19,
         secondaryPaymentDueDay: Number(configForm.secondaryPaymentDueDay) || 1,
         secondaryLastStatementAmount: Number(configForm.secondaryLastStatementAmount) || 0
@@ -488,26 +500,41 @@ export default function LiveCreditCardBudgetMonitor({
                 </span>
               </div>
 
-              {/* Statement Gap Status */}
-              <div className="border-t border-white/10 pt-2.5 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1">
-                    <Calendar size={11} className="text-indigo-400" />
-                    Statement Gap Window ({primary?.statementClosingDay || 19}th → {primary?.paymentDueDay || 1}st)
-                  </span>
-                  <span className="text-[11px] text-slate-400 block mt-0.5">
-                    {primary?.isGapActive 
-                      ? 'Deducting unpaid statement awaiting Direct Debit'
-                      : 'Inactive (Direct Debit already cleared)'}
+              {/* Statement Gap Status & Cycle Info */}
+              <div className="border-t border-white/10 pt-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1">
+                      <Calendar size={11} className="text-indigo-400" />
+                      {primary?.statementDateType === 'DAYS_BEFORE_PAYMENT' 
+                        ? `Statement Gap (${primary?.closingDateFormatted || 'Closing'} → ${primary?.paymentDateFormatted || 'Payment'})`
+                        : `Statement Gap Window (${primary?.statementClosingDay || 19}th → ${primary?.paymentDueDay || 1}st)`}
+                    </span>
+                    <span className="text-[11px] text-slate-400 block mt-0.5">
+                      {primary?.isGapActive 
+                        ? 'Deducting unpaid statement awaiting Direct Debit'
+                        : 'Inactive (Direct Debit already cleared)'}
+                    </span>
+                  </div>
+                  <span className={`font-mono text-xs font-bold px-2 py-1 rounded-lg ${
+                    primary?.isGapActive 
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
+                      : 'bg-white/5 text-slate-400'
+                  }`}>
+                    {primary?.isGapActive ? `-${formatCurrency(primary?.gapDeduction)}` : '£0.00'}
                   </span>
                 </div>
-                <span className={`font-mono text-xs font-bold px-2 py-1 rounded-lg ${
-                  primary?.isGapActive 
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
-                    : 'bg-white/5 text-slate-400'
-                }`}>
-                  {primary?.isGapActive ? `-${formatCurrency(primary?.gapDeduction)}` : '£0.00'}
-                </span>
+
+                {primary?.cycleStartFormatted && primary?.cycleEndFormatted && (
+                  <div className="flex items-center justify-between text-[10px] text-indigo-300/80 bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                    <span>Active Cycle: <strong className="text-white font-mono">{primary.cycleStartFormatted} → {primary.cycleEndFormatted}</strong></span>
+                    <span className="text-indigo-300/60 font-medium">
+                      {primary.statementDateType === 'DAYS_BEFORE_PAYMENT' 
+                        ? `${primary.statementDaysBeforePayment || 14} days prior` 
+                        : `Fixed ${primary.statementClosingDay || 19}th`}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -561,26 +588,41 @@ export default function LiveCreditCardBudgetMonitor({
                 </span>
               </div>
 
-              {/* Statement Gap Status */}
-              <div className="border-t border-white/10 pt-2.5 flex items-center justify-between">
-                <div>
-                  <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1">
-                    <Calendar size={11} className="text-purple-400" />
-                    Statement Gap Window ({secondary?.statementClosingDay || 19}th → {secondary?.paymentDueDay || 1}st)
-                  </span>
-                  <span className="text-[11px] text-slate-400 block mt-0.5">
-                    {secondary?.isGapActive 
-                      ? 'Deducting unpaid statement awaiting Direct Debit'
-                      : 'Inactive (Direct Debit already cleared)'}
+              {/* Statement Gap Status & Cycle Info */}
+              <div className="border-t border-white/10 pt-2.5 space-y-2">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-300 flex items-center gap-1">
+                      <Calendar size={11} className="text-purple-400" />
+                      {secondary?.statementDateType === 'DAYS_BEFORE_PAYMENT' 
+                        ? `Statement Gap (${secondary?.closingDateFormatted || 'Closing'} → ${secondary?.paymentDateFormatted || 'Payment'})`
+                        : `Statement Gap Window (${secondary?.statementClosingDay || 19}th → ${secondary?.paymentDueDay || 1}st)`}
+                    </span>
+                    <span className="text-[11px] text-slate-400 block mt-0.5">
+                      {secondary?.isGapActive 
+                        ? 'Deducting unpaid statement awaiting Direct Debit'
+                        : 'Inactive (Direct Debit already cleared)'}
+                    </span>
+                  </div>
+                  <span className={`font-mono text-xs font-bold px-2 py-1 rounded-lg ${
+                    secondary?.isGapActive 
+                      ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
+                      : 'bg-white/5 text-slate-400'
+                  }`}>
+                    {secondary?.isGapActive ? `-${formatCurrency(secondary?.gapDeduction)}` : '£0.00'}
                   </span>
                 </div>
-                <span className={`font-mono text-xs font-bold px-2 py-1 rounded-lg ${
-                  secondary?.isGapActive 
-                    ? 'bg-rose-500/20 text-rose-300 border border-rose-500/30' 
-                    : 'bg-white/5 text-slate-400'
-                }`}>
-                  {secondary?.isGapActive ? `-${formatCurrency(secondary?.gapDeduction)}` : '£0.00'}
-                </span>
+
+                {secondary?.cycleStartFormatted && secondary?.cycleEndFormatted && (
+                  <div className="flex items-center justify-between text-[10px] text-purple-300/80 bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
+                    <span>Active Cycle: <strong className="text-white font-mono">{secondary.cycleStartFormatted} → {secondary.cycleEndFormatted}</strong></span>
+                    <span className="text-purple-300/60 font-medium">
+                      {secondary.statementDateType === 'DAYS_BEFORE_PAYMENT' 
+                        ? `${secondary.statementDaysBeforePayment || 14} days prior` 
+                        : `Fixed ${secondary.statementClosingDay || 19}th`}
+                    </span>
+                  </div>
+                )}
               </div>
             </div>
           </div>
@@ -920,21 +962,69 @@ export default function LiveCreditCardBudgetMonitor({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                        Statement Closing Day
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        value={configForm.statementClosingDay}
-                        onChange={e => setConfigForm({ ...configForm, statementClosingDay: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
-                      />
-                      <span className="text-[10px] text-slate-400 mt-0.5 block">Day of month (default: 19th)</span>
+                  {/* Statement Date Calculation Mode */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-2">
+                      Statement Date Calculation
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950/60 rounded-xl border border-slate-700/60">
+                      <button
+                        type="button"
+                        onClick={() => setConfigForm({ ...configForm, statementDateType: 'FIXED_DAY' })}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                          configForm.statementDateType === 'FIXED_DAY'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Fixed Day of Month
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfigForm({ ...configForm, statementDateType: 'DAYS_BEFORE_PAYMENT' })}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                          configForm.statementDateType === 'DAYS_BEFORE_PAYMENT'
+                            ? 'bg-indigo-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Days Before Payment Date
+                      </button>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {configForm.statementDateType === 'DAYS_BEFORE_PAYMENT' ? (
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                          Days Before Payment Date
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="28"
+                          value={configForm.statementDaysBeforePayment}
+                          onChange={e => setConfigForm({ ...configForm, statementDaysBeforePayment: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">Number of days prior (e.g. 14)</span>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                          Statement Closing Day
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={configForm.statementClosingDay}
+                          onChange={e => setConfigForm({ ...configForm, statementClosingDay: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 font-mono"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">Day of month (default: 19th)</span>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
@@ -946,9 +1036,25 @@ export default function LiveCreditCardBudgetMonitor({
                         max="31"
                         value={configForm.paymentDueDay}
                         onChange={e => setConfigForm({ ...configForm, paymentDueDay: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-indigo-500 font-mono"
                       />
                       <span className="text-[10px] text-slate-400 mt-0.5 block">Direct Debit clearance day (default: 1st)</span>
+                    </div>
+                  </div>
+
+                  {/* Cycle explanation helper */}
+                  <div className="bg-indigo-950/40 border border-indigo-500/20 rounded-xl p-3 text-[11px] text-indigo-200/90 flex items-start gap-2">
+                    <Calendar size={14} className="text-indigo-400 shrink-0 mt-0.5" />
+                    <div>
+                      {configForm.statementDateType === 'DAYS_BEFORE_PAYMENT' ? (
+                        <p>
+                          Payments made on or before <strong>{configForm.statementDaysBeforePayment || 14} days prior</strong> to payment day count towards that statement. Spending from the next day forward rolls into your active cycle.
+                        </p>
+                      ) : (
+                        <p>
+                          Payments made on or before day <strong>{configForm.statementClosingDay || 19}</strong> count towards that statement. Spending from the next day forward rolls into your active cycle.
+                        </p>
+                      )}
                     </div>
                   </div>
 
@@ -1047,21 +1153,69 @@ export default function LiveCreditCardBudgetMonitor({
                     />
                   </div>
 
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
-                        Statement Closing Day
-                      </label>
-                      <input
-                        type="number"
-                        min="1"
-                        max="31"
-                        value={configForm.secondaryStatementClosingDay}
-                        onChange={e => setConfigForm({ ...configForm, secondaryStatementClosingDay: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500"
-                      />
-                      <span className="text-[10px] text-slate-400 mt-0.5 block">Day of month (default: 19th)</span>
+                  {/* Statement Date Calculation Mode */}
+                  <div>
+                    <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-2">
+                      Statement Date Calculation
+                    </label>
+                    <div className="grid grid-cols-2 gap-2 p-1 bg-slate-950/60 rounded-xl border border-slate-700/60">
+                      <button
+                        type="button"
+                        onClick={() => setConfigForm({ ...configForm, secondaryStatementDateType: 'FIXED_DAY' })}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                          configForm.secondaryStatementDateType === 'FIXED_DAY'
+                            ? 'bg-purple-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Fixed Day of Month
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setConfigForm({ ...configForm, secondaryStatementDateType: 'DAYS_BEFORE_PAYMENT' })}
+                        className={`py-2 px-3 rounded-lg text-xs font-bold transition-all ${
+                          configForm.secondaryStatementDateType === 'DAYS_BEFORE_PAYMENT'
+                            ? 'bg-purple-600 text-white shadow-md'
+                            : 'text-slate-400 hover:text-white'
+                        }`}
+                      >
+                        Days Before Payment Date
+                      </button>
                     </div>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-4">
+                    {configForm.secondaryStatementDateType === 'DAYS_BEFORE_PAYMENT' ? (
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                          Days Before Payment Date
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="28"
+                          value={configForm.secondaryStatementDaysBeforePayment}
+                          onChange={e => setConfigForm({ ...configForm, secondaryStatementDaysBeforePayment: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500 font-mono"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">Number of days prior (e.g. 14)</span>
+                      </div>
+                    ) : (
+                      <div>
+                        <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
+                          Statement Closing Day
+                        </label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="31"
+                          value={configForm.secondaryStatementClosingDay}
+                          onChange={e => setConfigForm({ ...configForm, secondaryStatementClosingDay: e.target.value })}
+                          className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500 font-mono"
+                        />
+                        <span className="text-[10px] text-slate-400 mt-0.5 block">Day of month (default: 19th)</span>
+                      </div>
+                    )}
 
                     <div>
                       <label className="block text-[11px] font-bold uppercase tracking-wider text-slate-300 mb-1">
@@ -1073,9 +1227,25 @@ export default function LiveCreditCardBudgetMonitor({
                         max="31"
                         value={configForm.secondaryPaymentDueDay}
                         onChange={e => setConfigForm({ ...configForm, secondaryPaymentDueDay: e.target.value })}
-                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500"
+                        className="w-full bg-slate-800 border border-slate-700 rounded-lg px-3 py-2 text-xs text-white outline-none focus:border-purple-500 font-mono"
                       />
                       <span className="text-[10px] text-slate-400 mt-0.5 block">Direct Debit clearance day (default: 1st)</span>
+                    </div>
+                  </div>
+
+                  {/* Cycle explanation helper */}
+                  <div className="bg-purple-950/40 border border-purple-500/20 rounded-xl p-3 text-[11px] text-purple-200/90 flex items-start gap-2">
+                    <Calendar size={14} className="text-purple-400 shrink-0 mt-0.5" />
+                    <div>
+                      {configForm.secondaryStatementDateType === 'DAYS_BEFORE_PAYMENT' ? (
+                        <p>
+                          Payments made on or before <strong>{configForm.secondaryStatementDaysBeforePayment || 14} days prior</strong> to payment day count towards that statement. Spending from the next day forward rolls into your active cycle.
+                        </p>
+                      ) : (
+                        <p>
+                          Payments made on or before day <strong>{configForm.secondaryStatementClosingDay || 19}</strong> count towards that statement. Spending from the next day forward rolls into your active cycle.
+                        </p>
+                      )}
                     </div>
                   </div>
 

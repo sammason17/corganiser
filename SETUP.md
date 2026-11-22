@@ -173,10 +173,18 @@ Track and simulate payoff schedules across multiple credit cards and balance tra
 
 ## Budget & Shared Credit Card Statement Calculator
 
-### Monthly Budget
-- Income, fixed monthly expenses, and shared household bills with custom split percentages (50/50, 100%, 33%).
-- Day-to-day spending allowance with an overspend monitor.
-- Recurring credit card charges and grocery shop logs.
+### Monthly Budget & Live Credit Card Budget Monitor
+- **Income & fixed expenses**: Income, fixed monthly expenses, and shared household bills with custom split percentages (50/50, 100%, 33%).
+- **Live Credit Card Budget Monitor**:
+  - Connect up to two personal cards (**Primary** and **Secondary**) via TrueLayer Open Banking, isolated from the household shared settlement card.
+  - Set a monthly **Budget Allowance** ceiling to monitor discretionary spending in real time.
+  - **Statement Date Calculation**:
+    - **Fixed day of month**: Statement closes on a specific day each month (e.g. 19th).
+    - **Days before payment date**: Statement closing day is calculated relative to payment due date (e.g. 14 days prior).
+    - Purchases on or before closing date count towards that statement; spending from the next day rolls into the new cycle.
+  - **Statement Gap Deduction**: Automatically subtracts unpaid previous statement amounts from live bank balances during the closing-to-payment gap window.
+  - **Credit Card Bills Deduction**: Automatically deducts recurring card subscriptions and card-flagged monthly expenses from live balances.
+  - **Overspend alerts**: Visual spend velocity bar and banner alert when discretionary spend exceeds allowance.
 
 ### Shared Statement Calculator & Live Sync
 - **Dynamic member & cardholder resolution**: Cardholder name is extracted directly from TrueLayer Open Banking (`name_on_card` / `display_name`). The calculator dynamically maps household members into "Who Paid?" selectors, computes individual balance splits, and addresses settlement emails to the exact resolved family members without hardcoded names.
@@ -270,13 +278,14 @@ Track and simulate payoff schedules across multiple credit cards and balance tra
 ### TrueLayer Open Banking
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
-| GET | /api/truelayer/status | Yes | Current sync state and consent remaining for family |
-| GET | /api/truelayer/auth-url | Yes | Generate OAuth authorization URL (encodes familyId in state) |
-| GET/POST | /api/truelayer/callback | No* | OAuth callback to exchange authorization code and link to family |
-| GET | /api/truelayer/cards | Yes | List cards connected under family account |
-| POST | /api/truelayer/config | Yes | Update card account ID for family |
-| POST | /api/truelayer/sync-now | Yes | On-demand statement check & settlement for family |
-| POST | /api/truelayer/disconnect | Yes | Disconnect TrueLayer and clear tokens for family |
+| GET | /api/truelayer/status | Yes | Current sync state, consent remaining, and card configs for shared, primary, and secondary cards |
+| GET | /api/truelayer/auth-url | Yes | Generate OAuth authorization URL (`cardType = 'shared' \| 'primary' \| 'secondary'`) |
+| GET/POST | /api/truelayer/callback | No* | OAuth callback to exchange authorization code and link to designated card slot |
+| GET | /api/truelayer/cards | Yes | List cards connected under designated account (`cardType = 'shared' \| 'primary' \| 'secondary'`) |
+| POST | /api/truelayer/config | Yes | Update card selection, statement date type (fixed vs days prior), closing day, and payment due day |
+| GET | /api/truelayer/live-monitor | Yes | Aggregated live metrics, statement gap deductions, bill subtractions, and budget burn rate across cards |
+| POST | /api/truelayer/sync-now | Yes | On-demand statement check & settlement for household shared card |
+| POST | /api/truelayer/disconnect | Yes | Disconnect TrueLayer and clear tokens (`cardType = 'shared' \| 'primary' \| 'secondary' \| 'all'`) |
 
 ### Scheduled Crons
 | Method | Endpoint | Auth | Description |

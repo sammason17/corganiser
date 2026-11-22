@@ -75,6 +75,8 @@ router.get('/status', requireAuth, async (req, res) => {
           cardAccountId: null,
           cardDisplayName: 'Primary Card',
           cardholderName: null,
+          statementDateType: 'FIXED_DAY',
+          statementDaysBeforePayment: 14,
           statementClosingDay: 19,
           paymentDueDay: 1,
           lastStatementAmount: 0,
@@ -87,6 +89,8 @@ router.get('/status', requireAuth, async (req, res) => {
           cardAccountId: null,
           cardDisplayName: 'Secondary Card',
           cardholderName: null,
+          statementDateType: 'FIXED_DAY',
+          statementDaysBeforePayment: 14,
           statementClosingDay: 19,
           paymentDueDay: 1,
           lastStatementAmount: 0,
@@ -141,6 +145,8 @@ router.get('/status', requireAuth, async (req, res) => {
         cardAccountId: config.primaryCardAccountId,
         cardDisplayName: config.primaryCardDisplayName || 'Primary Card',
         cardholderName: config.primaryCardholderName,
+        statementDateType: config.statementDateType || 'FIXED_DAY',
+        statementDaysBeforePayment: config.statementDaysBeforePayment ?? 14,
         statementClosingDay: config.statementClosingDay ?? 19,
         paymentDueDay: config.paymentDueDay ?? 1,
         lastStatementAmount: config.lastStatementAmount ?? 0,
@@ -154,6 +160,8 @@ router.get('/status', requireAuth, async (req, res) => {
         cardAccountId: config.secondaryCardAccountId,
         cardDisplayName: config.secondaryCardDisplayName || 'Secondary Card',
         cardholderName: config.secondaryCardholderName,
+        statementDateType: config.secondaryStatementDateType || 'FIXED_DAY',
+        statementDaysBeforePayment: config.secondaryStatementDaysBeforePayment ?? 14,
         statementClosingDay: config.secondaryStatementClosingDay ?? 19,
         paymentDueDay: config.secondaryPaymentDueDay ?? 1,
         lastStatementAmount: config.secondaryLastStatementAmount ?? 0,
@@ -397,12 +405,16 @@ router.post('/config', requireAuth, async (req, res) => {
       // Personal Primary Card fields
       primaryCardAccountId,
       primaryCardDisplayName,
+      statementDateType,
+      statementDaysBeforePayment,
       statementClosingDay,
       paymentDueDay,
       lastStatementAmount,
       // Personal Secondary Card fields
       secondaryCardAccountId,
       secondaryCardDisplayName,
+      secondaryStatementDateType,
+      secondaryStatementDaysBeforePayment,
       secondaryStatementClosingDay,
       secondaryPaymentDueDay,
       secondaryLastStatementAmount
@@ -422,6 +434,8 @@ router.post('/config', requireAuth, async (req, res) => {
     
     if (targetPrimaryId !== undefined) updateData.primaryCardAccountId = targetPrimaryId
     if (targetPrimaryName !== undefined) updateData.primaryCardDisplayName = targetPrimaryName
+    if (statementDateType !== undefined) updateData.statementDateType = statementDateType
+    if (statementDaysBeforePayment !== undefined) updateData.statementDaysBeforePayment = Number(statementDaysBeforePayment)
     if (statementClosingDay !== undefined) updateData.statementClosingDay = Number(statementClosingDay)
     if (paymentDueDay !== undefined) updateData.paymentDueDay = Number(paymentDueDay)
     if (lastStatementAmount !== undefined) updateData.lastStatementAmount = Number(lastStatementAmount)
@@ -429,6 +443,8 @@ router.post('/config', requireAuth, async (req, res) => {
     // 3. Personal Secondary Card
     if (secondaryCardAccountId !== undefined) updateData.secondaryCardAccountId = secondaryCardAccountId
     if (secondaryCardDisplayName !== undefined) updateData.secondaryCardDisplayName = secondaryCardDisplayName
+    if (secondaryStatementDateType !== undefined) updateData.secondaryStatementDateType = secondaryStatementDateType
+    if (secondaryStatementDaysBeforePayment !== undefined) updateData.secondaryStatementDaysBeforePayment = Number(secondaryStatementDaysBeforePayment)
     if (secondaryStatementClosingDay !== undefined) updateData.secondaryStatementClosingDay = Number(secondaryStatementClosingDay)
     if (secondaryPaymentDueDay !== undefined) updateData.secondaryPaymentDueDay = Number(secondaryPaymentDueDay)
     if (secondaryLastStatementAmount !== undefined) updateData.secondaryLastStatementAmount = Number(secondaryLastStatementAmount)

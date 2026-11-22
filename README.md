@@ -43,17 +43,22 @@ A personal and family life organiser built with React, Node/Express, and Postgre
 ### Budget & Finances
 - **Income tracking** — add salary and additional income sources
 - **Shared household bills** — add full bill amounts with configurable split percentage (50/50, 100%, 33%); your share is calculated automatically
-- **Monthly expenses** — add personal fixed costs; flag any item as "Credit Card" to include it in the credit card projection
+- **Monthly expenses** — add personal fixed costs; flag any item as "Credit Card" to automatically deduct it from your live card balance in the budget monitor
 - **Leftover budget** — automatically calculated: Total Income − My share of bills − Monthly expenses − Debt monthly payments
 - **Spending pie chart** — assign budget categories (with custom colours) to bills and expenses; a live conic-gradient pie chart shows your breakdown
-- **Primary & Secondary Cards Projection**:
-  - Define an explicit **"Primary Card Allowance"** for your day-to-day spending limit (food, fuel, leisure)
-  - Log recurring monthly primary card charges (subscriptions, bills) with configurable full vs. **personal portion** splits
-  - **Grocery shop tracker** — log individual shops with a name, total bill, and your personal portion; date-stamped
-  - **Secondary Cards expenses** — log additional expenses made on other accounts that should still count towards your day-to-day spending limit
-  - **Expected statement** = full recurring payments + full grocery totals + fixed primary card expenses
-  - **Financial breakdown** = cleanly isolates your fixed commitments from your flexible day-to-day spend
-  - Overspend warning banner strictly monitors your day-to-day spend (grocery portions + secondary cards) against your Primary Card Allowance limit
+- **Live Credit Card Budget Monitor (TrueLayer)**:
+  - Connect up to two personal credit cards (**Primary Card** & **Secondary Card**) via TrueLayer Open Banking, completely decoupled from the household shared settlement card.
+  - Define an explicit **"Budget Allowance"** ceiling to govern your flexible monthly discretionary spending.
+  - **Flexible Statement Date Calculation**:
+    - **Fixed day of month**: Statement closes on a designated calendar day (e.g. 19th of each month).
+    - **Days before payment date**: Statement closing day dynamically calculates relative to payment due date (e.g. 14 days prior to payment day).
+    - Purchases on or before the closing date count towards that statement; spending from the next day forward rolls into the active cycle.
+  - **Automatic Statement Gap Deduction**:
+    - During the gap window between statement close and Direct Debit clearance, unpaid previous statement amounts are automatically deducted from the bank's live balance to prevent inflating current-cycle spend.
+  - **Credit Card Bills Deduction**:
+    - Fixed card subscriptions (e.g. streaming, software) and card-flagged monthly expenses are deducted from live balances so only discretionary day-to-day purchases count towards your budget.
+  - **Additive Manual Spend Pot**: Track additional cash/debit payments or external card spending that counts toward your allowance.
+  - **Live Velocity & Overspend Monitoring**: Dynamic progress bar, live burn rate percentage, remaining allowance counter, and an active overspend alert banner.
 - **Shared Statement Calculator & Automation**:
   - Track shared food/grocery shops between family members with custom covered amounts.
   - **Dynamic Member & Cardholder Resolution**: Cardholder name is extracted directly from TrueLayer Open Banking (`name_on_card` / `display_name`). The calculator dynamically maps household members into "Who Paid?" selectors, computes individual balance splits, and addresses settlement emails to the exact resolved family members without hardcoding.
@@ -195,13 +200,14 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 ### TrueLayer Open Banking
 | Method | Endpoint | Description |
 |---|---|---|
-| GET | `/api/truelayer/status` | Current sync state and consent remaining for family |
-| GET | `/api/truelayer/auth-url` | Generate OAuth authorization URL (encodes familyId in state) |
-| GET/POST | `/api/truelayer/callback` | OAuth callback to exchange authorization code and link to family |
-| GET | `/api/truelayer/cards` | List cards connected under family account |
-| POST | `/api/truelayer/config` | Update card account ID for family |
-| POST | `/api/truelayer/sync-now` | On-demand statement check & settlement for family |
-| POST | `/api/truelayer/disconnect` | Disconnect TrueLayer and clear tokens for family |
+| GET | `/api/truelayer/status` | Current sync state, consent remaining, and card configs for shared, primary, and secondary cards |
+| GET | `/api/truelayer/auth-url` | Generate OAuth authorization URL (supports `cardType = 'shared' \| 'primary' \| 'secondary'`) |
+| GET/POST | `/api/truelayer/callback` | OAuth callback to exchange authorization code and link to designated card slot |
+| GET | `/api/truelayer/cards` | List cards connected under designated account (`cardType = 'shared' \| 'primary' \| 'secondary'`) |
+| POST | `/api/truelayer/config` | Update card account selection, statement date type (fixed vs days prior), closing day, and payment due day |
+| GET | `/api/truelayer/live-monitor` | Aggregated live metrics, statement gap deductions, bill subtractions, and budget burn rate across cards |
+| POST | `/api/truelayer/sync-now` | On-demand statement check & settlement for household shared card |
+| POST | `/api/truelayer/disconnect` | Disconnect TrueLayer and clear tokens (`cardType = 'shared' \| 'primary' \| 'secondary' \| 'all'`) |
 
 ### Scheduled Crons
 | Method | Endpoint | Description |
