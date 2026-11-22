@@ -4,6 +4,7 @@ export async function getBudgetData() {
   const { data } = await api.get('/budget/all')
   return data
 }
+export const getAllBudgetData = getBudgetData
 
 // Incomes
 export async function createIncome(payload) {
@@ -185,12 +186,12 @@ export async function getTrueLayerStatus() {
   const { data } = await api.get('/truelayer/status')
   return data
 }
-export async function getTrueLayerAuthUrl() {
-  const { data } = await api.get('/truelayer/auth-url')
+export async function getTrueLayerAuthUrl(cardType = 'primary') {
+  const { data } = await api.get('/truelayer/auth-url', { params: { cardType } })
   return data
 }
-export async function getTrueLayerCards() {
-  const { data } = await api.get('/truelayer/cards')
+export async function getTrueLayerCards(cardType = 'primary') {
+  const { data } = await api.get('/truelayer/cards', { params: { cardType } })
   return data
 }
 export async function updateTrueLayerConfig(payload) {
@@ -201,8 +202,12 @@ export async function syncTrueLayerNow() {
   const { data } = await api.post('/truelayer/sync-now')
   return data
 }
-export async function disconnectTrueLayer() {
-  const { data } = await api.post('/truelayer/disconnect')
+export async function disconnectTrueLayer(cardType = 'all') {
+  const { data } = await api.post('/truelayer/disconnect', { cardType })
+  return data
+}
+export async function getLiveCardMonitor() {
+  const { data } = await api.get('/truelayer/live-monitor')
   return data
 }
 

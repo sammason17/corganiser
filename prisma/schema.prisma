@@ -512,10 +512,28 @@ model CardAutomationConfig {
   tokenExpiresAt             DateTime? @map("token_expires_at")
   consentExpiresAt           DateTime? @map("consent_expires_at")
 
+  // Primary Card
   cardAccountId              String?   @map("card_account_id")
   cardholderName             String?   @map("cardholder_name")
   cardDisplayName            String?   @map("card_display_name")
   supplementaryCardId        String?   @map("supplementary_card_id")
+  statementClosingDay        Int       @default(19) @map("statement_closing_day")
+  paymentDueDay              Int       @default(1) @map("payment_due_day")
+  lastStatementAmount        Float     @default(0) @map("last_statement_amount")
+  primaryLastKnownBalance    Float     @default(0) @map("primary_last_known_balance")
+
+  // Secondary Card (supports same provider or separate bank connection)
+  secondaryAccessToken       String?   @map("secondary_access_token")
+  secondaryRefreshToken      String?   @map("secondary_refresh_token")
+  secondaryTokenExpiresAt    DateTime? @map("secondary_token_expires_at")
+  secondaryConsentExpiresAt  DateTime? @map("secondary_consent_expires_at")
+  secondaryCardAccountId     String?   @map("secondary_card_account_id")
+  secondaryCardholderName    String?   @map("secondary_cardholder_name")
+  secondaryCardDisplayName   String?   @map("secondary_card_display_name")
+  secondaryStatementClosingDay Int     @default(19) @map("secondary_statement_closing_day")
+  secondaryPaymentDueDay     Int       @default(1) @map("secondary_payment_due_day")
+  secondaryLastStatementAmount Float   @default(0) @map("secondary_last_statement_amount")
+  secondaryLastKnownBalance  Float     @default(0) @map("secondary_last_known_balance")
 
   lastKnownStatementDate     String?   @map("last_known_statement_date")
   lastProcessedStatementDate String?   @map("last_processed_statement_date")

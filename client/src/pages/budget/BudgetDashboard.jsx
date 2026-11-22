@@ -10,6 +10,7 @@ import { motion, AnimatePresence } from 'motion/react';
 import * as api from '../../lib/budgetApi';
 import { getDebtCards } from '../../lib/debtApi';
 import { calculateCurrentState } from '../../lib/debtUtils';
+import LiveCreditCardBudgetMonitor from './LiveCreditCardBudgetMonitor';
 
 const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currency', currency: 'GBP' }).format(val || 0);
 
@@ -331,7 +332,7 @@ export default function BudgetDashboard() {
             </Card>
 
             <Card title="Personal Monthly Expenses" icon={<ShoppingCart size={14} />}>
-               <p className="text-xs text-slate-500 mb-4 font-medium">Add daily spending estimates. Mark as 'Credit Card' to add to your credit card projection.</p>
+               <p className="text-xs text-slate-500 mb-4 font-medium">Add daily spending estimates. Mark as 'Credit Card' to identify expenses paid on card.</p>
                <ExpenseList data={data.expenses} categories={data.categories} refresh={fetchData} />
             </Card>
           </div>
@@ -339,134 +340,12 @@ export default function BudgetDashboard() {
           {/* 1. Shared Credit Card Statement Calculator (Shared Settlement) */}
           <SharedCreditCardStatementCalculator />
 
-          {/* 2. Credit Card Projection */}
-          <div className="bg-indigo-950 rounded-[2rem] p-8 text-white shadow-xl overflow-hidden relative">
-            <div className="absolute top-0 right-0 w-96 h-96 bg-indigo-500/20 rounded-full blur-3xl -translate-y-1/2 translate-x-1/4 pointer-events-none"></div>
-            
-            <div className="relative z-10 flex flex-col md:flex-row md:items-center justify-between gap-4 mb-8">
-              <div className="flex items-center gap-3">
-                <CreditCard size={28} className="text-indigo-400" />
-                <div>
-                  <h2 className="text-2xl font-black tracking-tight">Primary Card Projection</h2>
-                  <p className="text-indigo-300 text-xs font-bold uppercase tracking-widest mt-1">Expected Statement Tracker</p>
-                </div>
-              </div>
-              <div className="bg-white/10 rounded-xl p-3 border border-white/20 flex items-center gap-3 shadow-inner">
-                <div>
-                  <p className="text-[10px] text-indigo-300 font-bold uppercase tracking-widest">Primary Card Allowance</p>
-                  <p className="text-xs text-indigo-200">Base budget limit</p>
-                </div>
-                <div className="relative">
-                  <span className="absolute left-3 top-1/2 -translate-y-1/2 text-white font-bold">£</span>
-                  <input 
-                    type="number"
-                    value={data.primaryCardAllowance ?? data.cardAllowance ?? ''}
-                    onChange={(e) => setData({...data, primaryCardAllowance: Number(e.target.value) || 0, cardAllowance: Number(e.target.value) || 0})}
-                    onBlur={(e) => api.updatePrimaryCardAllowance(Number(e.target.value) || 0)}
-                    className="w-24 bg-indigo-950/50 text-white font-mono font-bold text-lg px-3 py-2 pl-7 rounded-lg border border-indigo-400/30 outline-none focus:border-indigo-400"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
-                <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 mb-4 flex items-center gap-2">
-                  <Repeat size={12} /> Recurring Primary Card Payments
-                </h3>
-                <PrimaryCardRecurringList data={primaryCardRecurring} refresh={fetchData} cardExpenses={data.expenses.filter(e => e.isPrimaryCard || e.isCreditCard)} />
-              </div>
-
-              <div className="bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-rose-300 flex items-center gap-2">
-                    <Wallet size={12} /> Secondary Cards Expenses
-                  </h3>
-                  {secondaryCardExpenses?.length > 0 && (
-                    <button onClick={() => { if(window.confirm('Clear all secondary cards expenses?')) { api.clearSecondaryCardExpenses().then(fetchData) } }} className="text-[9px] text-rose-400 hover:text-white font-bold uppercase tracking-widest bg-rose-400/10 hover:bg-rose-500/50 px-2 py-1 rounded transition-colors">
-                      Clear All
-                    </button>
-                  )}
-                </div>
-                <SecondaryCardExpenseList data={secondaryCardExpenses} refresh={fetchData} />
-              </div>
-
-              <div className="lg:col-span-2 bg-white/5 rounded-2xl p-6 border border-white/10 overflow-hidden">
-                <div className="flex items-center justify-between mb-4">
-                  <h3 className="text-[10px] font-black uppercase tracking-widest text-indigo-300 flex items-center gap-2">
-                    <ShoppingCart size={12} /> Grocery Shop Tracker
-                  </h3>
-                  {primaryCardGrocery?.length > 0 && (
-                    <button onClick={() => { if(window.confirm('Clear all grocery shops?')) { api.clearPrimaryCardGrocery().then(fetchData) } }} className="text-[9px] text-indigo-400 hover:text-white font-bold uppercase tracking-widest bg-indigo-400/10 hover:bg-indigo-500/50 px-2 py-1 rounded transition-colors">
-                      Clear All
-                    </button>
-                  )}
-                </div>
-                <PrimaryCardGroceryList data={primaryCardGrocery} refresh={fetchData} />
-              </div>
-            </div>
-
-            {groceryOverBudget && (
-              <div className="flex items-start gap-3 bg-red-500/20 border border-red-500/40 rounded-2xl p-4 mb-2">
-                <span className="text-red-400 text-lg mt-0.5">⚠️</span>
-                <div>
-                  <p className="text-red-300 font-black text-xs uppercase tracking-widest">Budget exceeded!</p>
-                  <p className="text-red-200 text-xs mt-1">
-                    Your day-to-day spend (grocery + secondary cards) is <span className="font-bold">{formatCurrency(myDayToDaySpend)}</span>, which exceeds your day-to-day limit of <span className="font-bold">{formatCurrency(effectiveDayToDayBudget)}</span> by <span className="font-bold text-red-400">{formatCurrency(overspendAmount)}</span>.
-                  </p>
-                </div>
-              </div>
-            )}
-
-            <div className="bg-black/20 p-6 rounded-2xl border border-white/5">
-              <div className="flex flex-col md:flex-row gap-8 mb-6">
-                <div>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">Total Statement Should Be</p>
-                  <p className="text-3xl font-black font-mono text-white">{formatCurrency(expectedPrimaryCardStatement)}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-slate-400 font-bold uppercase tracking-widest mb-1">My Personal Portion</p>
-                  <p className={`text-3xl font-black font-mono ${groceryOverBudget ? 'text-red-400' : 'text-indigo-400'}`}>{formatCurrency(myPrimaryCardPortion)}</p>
-                </div>
-              </div>
-              <div className="border-t border-white/10 pt-4 space-y-2">
-                <p className="text-[9px] font-black uppercase tracking-widest text-indigo-400 mb-3">Breakdown</p>
-                <div className="flex justify-between text-xs text-indigo-200">
-                  <span>Recurring subscriptions (full)</span>
-                  <span className="font-mono">{formatCurrency(totalPrimaryCardRecurringFull)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-indigo-200 opacity-60 ml-4 mb-2">
-                  <span>↳ My recurring portion</span>
-                  <span className="font-mono">{formatCurrency(totalPrimaryCardRecurringMine)}</span>
-                </div>
-                {totalPrimaryCardExpenses > 0 && (
-                  <div className="flex justify-between text-xs text-indigo-200 mb-2">
-                    <span>Fixed Primary Card expenses</span>
-                    <span className="font-mono">{formatCurrency(totalPrimaryCardExpenses)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-xs text-indigo-200">
-                  <span>Monthly day-to-day allowance</span>
-                  <span className="font-mono">{formatCurrency(effectiveDayToDayBudget)}</span>
-                </div>
-                {totalSecondaryCards > 0 && (
-                  <div className="flex justify-between text-xs text-rose-300">
-                    <span>Secondary Cards spend</span>
-                    <span className="font-mono">+{formatCurrency(totalSecondaryCards)}</span>
-                  </div>
-                )}
-                <div className="flex justify-between text-xs text-indigo-200">
-                  <span>Grocery shop total (full)</span>
-                  <span className="font-mono">{formatCurrency(totalPrimaryCardGroceryFull)}</span>
-                </div>
-                <div className="flex justify-between text-xs text-emerald-300 border-t border-white/10 pt-2">
-                  <span>↳ My day-to-day spend (grocery + secondary cards)</span>
-                  <span className="font-mono">{formatCurrency(myDayToDaySpend)} of {formatCurrency(effectiveDayToDayBudget)} limit</span>
-                </div>
-              </div>
-            </div>
-
-          </div>
+          {/* 2. Live Credit Card Budget Monitor */}
+          <LiveCreditCardBudgetMonitor 
+            primaryCardAllowance={data.primaryCardAllowance ?? data.cardAllowance ?? 0}
+            onAllowanceChange={(val) => setData(prev => ({ ...prev, primaryCardAllowance: val, cardAllowance: val }))}
+            refreshParent={fetchData}
+          />
 
         </div>
       </div>
