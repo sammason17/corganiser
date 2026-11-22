@@ -10,16 +10,30 @@ const formatCurrency = (val) => new Intl.NumberFormat('en-GB', { style: 'currenc
 
 export default function LiveCreditCardBudgetMonitor({ 
   primaryCardAllowance = 0, 
+  expenses = [],
+  recurringBills = [],
   onAllowanceChange, 
   refreshParent 
 }) {
   const [metrics, setMetrics] = useState(null);
-  const [creditCardBills, setCreditCardBills] = useState([]);
-  const [cardExpenses, setCardExpenses] = useState([]);
+  const [creditCardBills, setCreditCardBills] = useState(recurringBills || []);
+  const [cardExpenses, setCardExpenses] = useState((expenses || []).filter(e => e.isPrimaryCard || e.isCreditCard));
   const [manualPayments, setManualPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
   const [allowanceInput, setAllowanceInput] = useState(primaryCardAllowance || '');
+
+  useEffect(() => {
+    if (expenses?.length) {
+      setCardExpenses(expenses.filter(e => e.isPrimaryCard || e.isCreditCard));
+    }
+  }, [expenses]);
+
+  useEffect(() => {
+    if (recurringBills?.length) {
+      setCreditCardBills(recurringBills);
+    }
+  }, [recurringBills]);
 
   // Modal State for Card Configuration
   const [showConfigModal, setShowConfigModal] = useState(false);
@@ -254,7 +268,15 @@ export default function LiveCreditCardBudgetMonitor({
   const primary = metrics?.primaryCard;
   const secondary = metrics?.secondaryCard;
   const allowance = Number(allowanceInput) || metrics?.budgetAllowance || 0;
-  const totalSpendUsed = metrics?.totalSpendUsed ?? 0;
+
+  const totalCardExpenses = cardExpenses.reduce((s, e) => s + (e.amount || 0), 0);
+  const totalRecurringBills = creditCardBills.reduce((s, b) => s + (b.amount || 0), 0);
+  const totalCreditCardBills = metrics?.totalCreditCardBills ?? (totalRecurringBills + totalCardExpenses);
+
+  const totalLiveCardSpend = metrics?.totalLiveCardSpend ?? ((primary?.activeCycleSpend || 0) + (secondary?.activeCycleSpend || 0));
+  const netLiveCardSpend = Math.max(0, totalLiveCardSpend - totalCreditCardBills);
+  const manualPaymentsTotal = metrics?.manualPayments ?? manualPayments.reduce((s, m) => s + (m.amount || 0), 0);
+  const totalSpendUsed = netLiveCardSpend + manualPaymentsTotal;
   const remainingBudget = allowance - totalSpendUsed;
   const isOverBudget = allowance > 0 && totalSpendUsed > allowance;
   const overspendAmount = Math.max(0, totalSpendUsed - allowance);

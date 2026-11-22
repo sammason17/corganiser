@@ -343,6 +343,8 @@ export default function BudgetDashboard() {
           {/* 2. Live Credit Card Budget Monitor */}
           <LiveCreditCardBudgetMonitor 
             primaryCardAllowance={data.primaryCardAllowance ?? data.cardAllowance ?? 0}
+            expenses={data.expenses}
+            recurringBills={data.primaryCardRecurring || data.cardRecurring}
             onAllowanceChange={(val) => setData(prev => ({ ...prev, primaryCardAllowance: val, cardAllowance: val }))}
             refreshParent={fetchData}
           />
@@ -805,9 +807,9 @@ function ExpenseList({ data, categories, refresh }) {
                           <form onSubmit={(ev) => handleUpdate(ev, e.id)} className="flex flex-wrap gap-2 w-full pr-2 items-center">
                             <input value={editForm.name} onChange={ev=>setEditForm({...editForm, name: ev.target.value})} className="flex-1 min-w-[120px] bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="Name" />
                             <input type="number" value={editForm.amount} onChange={ev=>setEditForm({...editForm, amount: ev.target.value})} className="w-16 bg-white text-xs px-2 py-1 rounded border border-slate-200 outline-none" placeholder="£" />
-                            <label className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-500">
+                            <label className="flex items-center gap-1 text-[10px] font-bold uppercase text-slate-500 cursor-pointer">
                               <input type="checkbox" checked={editForm.isCreditCard} onChange={ev=>setEditForm({...editForm, isCreditCard: ev.target.checked})} />
-                              Primary Card
+                              Credit Card
                             </label>
                             <select value={editForm.categoryId} onChange={ev=>setEditForm({...editForm, categoryId: ev.target.value})} className="bg-white text-xs px-1 py-1 rounded border border-slate-200 outline-none">
                               <option value="">None</option>
@@ -820,7 +822,7 @@ function ExpenseList({ data, categories, refresh }) {
                           <div className="flex-1">
                             <div className="flex items-center gap-2">
                               <span className="text-sm font-bold text-slate-700">{e.name}</span>
-                              {(e.isPrimaryCard || e.isCreditCard) && <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Primary Card</span>}
+                              {(e.isPrimaryCard || e.isCreditCard) && <span className="bg-indigo-100 text-indigo-700 text-[8px] font-black uppercase px-1.5 py-0.5 rounded">Credit Card</span>}
                             </div>
                             {e.category && <span className="text-[9px] font-bold uppercase tracking-widest text-slate-400">{e.category.name}</span>}
                           </div>
@@ -855,7 +857,7 @@ function ExpenseList({ data, categories, refresh }) {
         <input placeholder="£" type="number" value={amount} onChange={e=>setAmount(e.target.value)} className="w-20 bg-slate-50 text-xs px-3 py-2 rounded-lg border border-slate-200 outline-none" />
         <label className="flex items-center gap-1.5 text-[10px] font-bold uppercase text-slate-500 bg-slate-50 px-2 rounded-lg border border-slate-200 cursor-pointer">
           <input type="checkbox" checked={isCreditCard} onChange={e=>setIsCreditCard(e.target.checked)} />
-          Primary Card
+          Credit Card
         </label>
         <select value={categoryId} onChange={e=>setCategoryId(e.target.value)} className="bg-slate-50 text-xs px-2 py-2 rounded-lg border border-slate-200 outline-none">
           <option value="">Category</option>
