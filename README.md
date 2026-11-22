@@ -77,7 +77,19 @@ A personal and family life organiser built with React, Node/Express, and Postgre
     - When viewing any previously exported month, click **Manual Override** to amend the statement spend if an outlier or merchant discrepancy occurs.
     - Live recalculation preview keeps all recorded shared grocery splits intact and updates the final amount owed.
     - Updates the archive record (`isOverridden: true`), displays an `• [Amended]` badge in the UI, and immediately dispatches an amended statement email (`Credit Card Settlement (Amended) — [Month-Year]`) to family members with an amber manual override notice.
-  - **Vercel Cron Integration**: Runs automated pre-check (18th) and settlement (24th) crons securely in production via `CRON_SECRET`.
+  - **Vercel Cron Integration**: Runs automated pre-check (18th), settlement (24th), and monthly financial summary (28th) crons securely in production via `CRON_SECRET`.
+- **Monthly Financial Summary (28th Cron)**:
+  - Dispatched automatically on the **28th of each month at 09:00 UTC** (`0 9 28 * *`) to provide users with a complete financial summary a few days ahead of month-end and scheduled direct debits.
+  - **Credit Card Budget & Closed Statement Adherence**:
+    - Calculates the closed statement balances due for payment on the 1st across Primary and Secondary cards awaiting Direct Debit.
+    - Subtracts fixed recurring card bills and card-flagged personal expenses to isolate net discretionary card spending.
+    - Compares net spending against the user's configured monthly budget allowance ceiling with a clear visual badge (`On Budget` with remaining buffer vs `Over Budget by £X`).
+  - **Cash Flow Overview (Top-of-Page Summary)**:
+    - Provides a full breakdown of total monthly income, share of household bills, personal monthly expenses, and monthly debt payments.
+    - Highlights leftover monthly budget (or monthly deficit) in high-contrast financial cards.
+  - **Debt Overview (DebtFlow)**:
+    - Summarizes total outstanding portfolio debt balance, upcoming monthly debt payment commitments, scheduled debt reduction from the previous month, and active debt accounts count.
+  - **Zero Names Policy**: All communications and calculations resolve names and roles dynamically via database records.
 - **Household & Family Sharing**:
   - Multi-tenant household isolation: Users belong to a `Family` with role management (`OWNER`, `MEMBER`) and unique invite codes (e.g. `FAM-XYZ123`).
   - Household management is available directly in **Settings → Household** (view members, copy/regenerate invite codes, rename household, join new family) and via the **Household** header button on the Budget dashboard.
@@ -215,5 +227,6 @@ Frontend runs at `http://localhost:5173`, API at `http://localhost:3001`.
 |---|---|---|
 | GET | `/api/cron/precheck` | 18th pre-statement check reminder across active families (Bearer CRON_SECRET) |
 | GET | `/api/cron/settlement` | 24th monthly settlement & email runner across active families (Bearer CRON_SECRET) |
+| GET | `/api/cron/monthly-summary` | 28th monthly personal financial summary runner (Bearer CRON_SECRET) |
 
 All endpoints except register, login, the calendar feed, and OAuth callback require an `Authorization: Bearer <token>` header.

@@ -292,6 +292,7 @@ Track and simulate payoff schedules across multiple credit cards and balance tra
 |--------|----------|------|-------------|
 | GET | /api/cron/precheck | Yes* | 18th pre-statement check reminder across active families |
 | GET | /api/cron/settlement | Yes* | 24th monthly settlement & email runner across active families |
+| GET | /api/cron/monthly-summary | Yes* | 28th monthly financial summary runner ahead of month-end |
 
 *\*The calendar feed authenticates via a signed query-string token. TrueLayer OAuth callback authenticates via OAuth state token. Cron endpoints authenticate via `Authorization: Bearer <CRON_SECRET>`.*
 

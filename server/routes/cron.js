@@ -1,5 +1,6 @@
 import express from 'express'
 import { run18thPrecheckReminder, checkAndRunStatementSettlement } from '../../lib/settlementAutomation.js'
+import { run28thMonthlyFinancialSummary } from '../../lib/financialSummaryAutomation.js'
 
 const router = express.Router()
 
@@ -51,4 +52,20 @@ router.get('/settlement', verifyCronSecret, async (req, res) => {
   }
 })
 
+/**
+ * GET /api/cron/monthly-summary
+ * Triggered on the 28th of each month to send personal financial summary ahead of month-end
+ */
+router.get('/monthly-summary', verifyCronSecret, async (req, res) => {
+  try {
+    const force = Boolean(req.query.force === 'true')
+    const result = await run28thMonthlyFinancialSummary({ force })
+    res.json({ success: true, timestamp: new Date().toISOString(), result })
+  } catch (err) {
+    console.error('[Cron monthly-summary Error]', err)
+    res.status(500).json({ error: err.message })
+  }
+})
+
 export default router
+

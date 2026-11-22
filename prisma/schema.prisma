@@ -550,6 +550,7 @@ model CardAutomationConfig {
   lastKnownStatementDate     String?   @map("last_known_statement_date")
   lastProcessedStatementDate String?   @map("last_processed_statement_date")
   lastPrecheckSentMonth      String?   @map("last_precheck_sent_month")
+  lastFinancialSummarySentMonth String? @map("last_financial_summary_sent_month")
 
   isActive                   Boolean   @default(false) @map("is_active")
   lastSyncAt                 DateTime? @map("last_sync_at")
