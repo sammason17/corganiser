@@ -43,7 +43,7 @@ function getAppRedirectUrl(path = '/budget') {
 
 /**
  * GET /api/truelayer/status
- * Returns current connection state for both primary and secondary cards
+ * Returns current connection state for shared household card, personal primary, and personal secondary cards
  */
 router.get('/status', requireAuth, async (req, res) => {
   try {
@@ -62,6 +62,14 @@ router.get('/status', requireAuth, async (req, res) => {
         lastSyncAt: null,
         lastSyncStatus: null,
         lastSyncMessage: null,
+        shared: {
+          isConnected: false,
+          cardAccountId: null,
+          cardDisplayName: null,
+          cardholderName: null,
+          consentExpiresAt: null,
+          consentDaysRemaining: null
+        },
         primary: {
           isConnected: false,
           cardAccountId: null,
@@ -89,23 +97,21 @@ router.get('/status', requireAuth, async (req, res) => {
       })
     }
 
-    let primaryConsentDays = null
-    if (config.consentExpiresAt) {
-      const diff = new Date(config.consentExpiresAt).getTime() - Date.now()
-      primaryConsentDays = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
+    const calcDays = (date) => {
+      if (!date) return null
+      const diff = new Date(date).getTime() - Date.now()
+      return Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
     }
 
-    let secondaryConsentDays = null
-    const secConsentDate = config.secondaryConsentExpiresAt || config.consentExpiresAt
-    if (secConsentDate) {
-      const diff = new Date(secConsentDate).getTime() - Date.now()
-      secondaryConsentDays = Math.max(0, Math.ceil(diff / (1000 * 60 * 60 * 24)))
-    }
+    const sharedConsentDays = calcDays(config.consentExpiresAt)
+    const primaryConsentDays = calcDays(config.primaryConsentExpiresAt)
+    const secondaryConsentDays = calcDays(config.secondaryConsentExpiresAt || config.primaryConsentExpiresAt)
 
-    const isPrimaryConnected = Boolean(config.accessToken && config.refreshToken)
+    const isSharedConnected = Boolean(config.accessToken && config.refreshToken)
+    const isPrimaryConnected = Boolean(config.primaryAccessToken && config.primaryRefreshToken)
     const isSecondaryConnected = Boolean(
       (config.secondaryAccessToken && config.secondaryRefreshToken) ||
-      (config.secondaryCardAccountId && config.accessToken)
+      (config.secondaryCardAccountId && config.primaryAccessToken)
     )
 
     res.json({
@@ -113,26 +119,36 @@ router.get('/status', requireAuth, async (req, res) => {
       lastSyncAt: config.lastSyncAt,
       lastSyncStatus: config.lastSyncStatus,
       lastSyncMessage: config.lastSyncMessage,
-      // Backward-compatible top-level fields
-      isConnected: isPrimaryConnected,
+      // Backward-compatible fields for Shared Statement Settlement Calculator
+      isConnected: isSharedConnected,
       cardAccountId: config.cardAccountId,
       lastKnownStatementDate: config.lastKnownStatementDate,
       lastProcessedStatementDate: config.lastProcessedStatementDate,
       consentExpiresAt: config.consentExpiresAt,
-      consentDaysRemaining: primaryConsentDays,
-      // Dual-card detailed structure
+      consentDaysRemaining: sharedConsentDays,
+      // Dedicated Shared Card Slot
+      shared: {
+        isConnected: isSharedConnected,
+        cardAccountId: config.cardAccountId,
+        cardDisplayName: config.cardDisplayName,
+        cardholderName: config.cardholderName,
+        consentExpiresAt: config.consentExpiresAt,
+        consentDaysRemaining: sharedConsentDays
+      },
+      // Dedicated Personal Primary Card (Decoupled from shared household card)
       primary: {
         isConnected: isPrimaryConnected,
-        cardAccountId: config.cardAccountId,
-        cardDisplayName: config.cardDisplayName || 'Primary Card',
-        cardholderName: config.cardholderName,
+        cardAccountId: config.primaryCardAccountId,
+        cardDisplayName: config.primaryCardDisplayName || 'Primary Card',
+        cardholderName: config.primaryCardholderName,
         statementClosingDay: config.statementClosingDay ?? 19,
         paymentDueDay: config.paymentDueDay ?? 1,
         lastStatementAmount: config.lastStatementAmount ?? 0,
         rawBalance: config.primaryLastKnownBalance ?? 0,
-        consentExpiresAt: config.consentExpiresAt,
+        consentExpiresAt: config.primaryConsentExpiresAt,
         consentDaysRemaining: primaryConsentDays
       },
+      // Dedicated Personal Secondary Card
       secondary: {
         isConnected: isSecondaryConnected,
         cardAccountId: config.secondaryCardAccountId,
@@ -142,7 +158,7 @@ router.get('/status', requireAuth, async (req, res) => {
         paymentDueDay: config.secondaryPaymentDueDay ?? 1,
         lastStatementAmount: config.secondaryLastStatementAmount ?? 0,
         rawBalance: config.secondaryLastKnownBalance ?? 0,
-        consentExpiresAt: config.secondaryConsentExpiresAt || config.consentExpiresAt,
+        consentExpiresAt: config.secondaryConsentExpiresAt || config.primaryConsentExpiresAt,
         consentDaysRemaining: secondaryConsentDays
       }
     })
@@ -154,12 +170,14 @@ router.get('/status', requireAuth, async (req, res) => {
 
 /**
  * GET /api/truelayer/auth-url
- * Returns the OAuth consent URL to initiate connection, encoding familyId and cardType in state
+ * Returns the OAuth consent URL: supports cardType = 'shared' | 'primary' | 'secondary'
  */
 router.get('/auth-url', requireAuth, (req, res) => {
   try {
     const redirectUri = getRedirectUri(req)
-    const cardType = req.query.cardType === 'secondary' ? 'secondary' : 'primary'
+    const cardType = req.query.cardType === 'secondary' 
+      ? 'secondary' 
+      : (req.query.cardType === 'primary' ? 'primary' : 'shared')
     const stateObj = { familyId: req.user.familyId || 'singleton', cardType }
     const state = JSON.stringify(stateObj)
     const url = getAuthUrl({ redirectUri, state })
@@ -172,7 +190,7 @@ router.get('/auth-url', requireAuth, (req, res) => {
 
 /**
  * GET/POST /api/truelayer/callback
- * Handles OAuth callback from TrueLayer for primary or secondary card
+ * Handles OAuth callback from TrueLayer for shared card, personal primary, or personal secondary card
  */
 router.all('/callback', async (req, res) => {
   const code = req.query.code || req.body?.code
@@ -191,14 +209,14 @@ router.all('/callback', async (req, res) => {
 
   try {
     let targetFamilyId = null
-    let cardType = 'primary'
+    let cardType = 'shared'
 
     if (rawState) {
       try {
         const parsed = JSON.parse(rawState)
         if (parsed && typeof parsed === 'object') {
           targetFamilyId = parsed.familyId || null
-          cardType = parsed.cardType === 'secondary' ? 'secondary' : 'primary'
+          cardType = parsed.cardType || 'shared'
         }
       } catch {
         targetFamilyId = rawState
@@ -230,31 +248,49 @@ router.all('/callback', async (req, res) => {
       console.warn('Could not list cards immediately after connect:', cardErr.message)
     }
 
-    const isSecondary = cardType === 'secondary'
-    const configUpdate = isSecondary
-      ? {
-          secondaryAccessToken: tokens.access_token,
-          secondaryRefreshToken: tokens.refresh_token,
-          secondaryTokenExpiresAt: tokenExpiresAt,
-          secondaryConsentExpiresAt: consentExpiresAt,
-          ...(defaultCardId && { secondaryCardAccountId: defaultCardId }),
-          ...(cardholderName && { secondaryCardholderName: cardholderName }),
-          ...(cardDisplayName && { secondaryCardDisplayName: cardDisplayName }),
-          lastSyncStatus: 'CONNECTED',
-          lastSyncMessage: 'Connected Secondary Card to TrueLayer successfully'
-        }
-      : {
-          accessToken: tokens.access_token,
-          refreshToken: tokens.refresh_token,
-          tokenExpiresAt,
-          consentExpiresAt,
-          isActive: true,
-          lastSyncStatus: 'CONNECTED',
-          lastSyncMessage: 'Connected Primary Card to TrueLayer successfully',
-          ...(defaultCardId && { cardAccountId: defaultCardId }),
-          ...(cardholderName && { cardholderName }),
-          ...(cardDisplayName && { cardDisplayName }),
-        }
+    let configUpdate = {}
+
+    if (cardType === 'primary') {
+      // Personal Primary Card
+      configUpdate = {
+        primaryAccessToken: tokens.access_token,
+        primaryRefreshToken: tokens.refresh_token,
+        primaryTokenExpiresAt: tokenExpiresAt,
+        primaryConsentExpiresAt: consentExpiresAt,
+        ...(defaultCardId && { primaryCardAccountId: defaultCardId }),
+        ...(cardholderName && { primaryCardholderName: cardholderName }),
+        ...(cardDisplayName && { primaryCardDisplayName: cardDisplayName }),
+        lastSyncStatus: 'CONNECTED',
+        lastSyncMessage: 'Connected Personal Primary Card to TrueLayer successfully'
+      }
+    } else if (cardType === 'secondary') {
+      // Personal Secondary Card
+      configUpdate = {
+        secondaryAccessToken: tokens.access_token,
+        secondaryRefreshToken: tokens.refresh_token,
+        secondaryTokenExpiresAt: tokenExpiresAt,
+        secondaryConsentExpiresAt: consentExpiresAt,
+        ...(defaultCardId && { secondaryCardAccountId: defaultCardId }),
+        ...(cardholderName && { secondaryCardholderName: cardholderName }),
+        ...(cardDisplayName && { secondaryCardDisplayName: cardDisplayName }),
+        lastSyncStatus: 'CONNECTED',
+        lastSyncMessage: 'Connected Personal Secondary Card to TrueLayer successfully'
+      }
+    } else {
+      // Shared Settlement Card (Used for household statement calculation & exports)
+      configUpdate = {
+        accessToken: tokens.access_token,
+        refreshToken: tokens.refresh_token,
+        tokenExpiresAt,
+        consentExpiresAt,
+        isActive: true,
+        lastSyncStatus: 'CONNECTED',
+        lastSyncMessage: 'Connected Shared Household Card to TrueLayer successfully',
+        ...(defaultCardId && { cardAccountId: defaultCardId }),
+        ...(cardholderName && { cardholderName }),
+        ...(cardDisplayName && { cardDisplayName }),
+      }
+    }
 
     if (targetFamilyId) {
       await prisma.cardAutomationConfig.upsert({
@@ -285,11 +321,14 @@ router.all('/callback', async (req, res) => {
 
 /**
  * GET /api/truelayer/cards
- * Lists available cards for primary or secondary slot
+ * Lists available cards for 'shared' (default), 'primary', or 'secondary' slot
  */
 router.get('/cards', requireAuth, async (req, res) => {
   try {
-    const cardType = req.query.cardType === 'secondary' ? 'secondary' : 'primary'
+    const cardType = req.query.cardType === 'secondary'
+      ? 'secondary'
+      : (req.query.cardType === 'primary' ? 'primary' : 'shared')
+
     const tokenData = await getValidAccessToken(req.user.familyId, cardType)
     if (!tokenData) {
       return res.status(401).json({ error: `TrueLayer is not connected for ${cardType} card` })
@@ -298,10 +337,27 @@ router.get('/cards', requireAuth, async (req, res) => {
     const { accessToken, config } = tokenData
     const cards = await getCards(accessToken)
 
-    const isSecondary = cardType === 'secondary'
-    const targetCardId = isSecondary
-      ? (config.secondaryCardAccountId || (cards[0] ? cards[0].account_id : null))
-      : (config.cardAccountId || (cards[0] ? cards[0].account_id : null))
+    let targetCardId = null
+    let cardholderName = null
+    let cardDisplayName = null
+
+    if (cardType === 'primary') {
+      targetCardId = config.primaryCardAccountId || (cards[0] ? cards[0].account_id : null)
+      const activeCard = cards.find(c => c.account_id === targetCardId) || cards[0]
+      cardholderName = activeCard?.name_on_card || config.primaryCardholderName
+      cardDisplayName = activeCard?.display_name || config.primaryCardDisplayName
+    } else if (cardType === 'secondary') {
+      targetCardId = config.secondaryCardAccountId || (cards[0] ? cards[0].account_id : null)
+      const activeCard = cards.find(c => c.account_id === targetCardId) || cards[0]
+      cardholderName = activeCard?.name_on_card || config.secondaryCardholderName
+      cardDisplayName = activeCard?.display_name || config.secondaryCardDisplayName
+    } else {
+      // shared
+      targetCardId = config.cardAccountId || (cards[0] ? cards[0].account_id : null)
+      const activeCard = cards.find(c => c.account_id === targetCardId) || cards[0]
+      cardholderName = activeCard?.name_on_card || config.cardholderName
+      cardDisplayName = activeCard?.display_name || config.cardDisplayName
+    }
 
     let currentBalance = null
     if (targetCardId) {
@@ -311,14 +367,6 @@ router.get('/cards', requireAuth, async (req, res) => {
         console.warn(`Could not fetch ${cardType} balance:`, e.message)
       }
     }
-
-    const activeCard = cards.find(c => c.account_id === targetCardId) || cards[0]
-    const cardholderName = isSecondary
-      ? (activeCard?.name_on_card || config.secondaryCardholderName)
-      : (activeCard?.name_on_card || config.cardholderName)
-    const cardDisplayName = isSecondary
-      ? (activeCard?.display_name || config.secondaryCardDisplayName)
-      : (activeCard?.display_name || config.cardDisplayName)
 
     res.json({
       cardType,
@@ -336,53 +384,65 @@ router.get('/cards', requireAuth, async (req, res) => {
 
 /**
  * POST /api/truelayer/config
- * Update card account selection, statement days, or payment days for family
+ * Update card account selection, statement days, or payment days for shared or personal cards
  */
 router.post('/config', requireAuth, async (req, res) => {
   try {
     const {
+      cardType,
+      // Shared Card fields
       cardAccountId,
       cardDisplayName,
+      isActive,
+      // Personal Primary Card fields
+      primaryCardAccountId,
+      primaryCardDisplayName,
       statementClosingDay,
       paymentDueDay,
       lastStatementAmount,
+      // Personal Secondary Card fields
       secondaryCardAccountId,
       secondaryCardDisplayName,
       secondaryStatementClosingDay,
       secondaryPaymentDueDay,
-      secondaryLastStatementAmount,
-      isActive
+      secondaryLastStatementAmount
     } = req.body
 
     const familyId = req.user.familyId
     const updateData = {}
 
-    // Primary Card fields
-    if (cardAccountId !== undefined) updateData.cardAccountId = cardAccountId
-    if (cardDisplayName !== undefined) updateData.cardDisplayName = cardDisplayName
+    // 1. Shared Card (If explicitly cardType === 'shared' or shared cardAccountId provided without primaryCardAccountId)
+    if (cardAccountId !== undefined && cardType !== 'primary') updateData.cardAccountId = cardAccountId
+    if (cardDisplayName !== undefined && cardType !== 'primary') updateData.cardDisplayName = cardDisplayName
+    if (isActive !== undefined) updateData.isActive = Boolean(isActive)
+
+    // 2. Personal Primary Card
+    const targetPrimaryId = primaryCardAccountId !== undefined ? primaryCardAccountId : (cardType === 'primary' ? cardAccountId : undefined)
+    const targetPrimaryName = primaryCardDisplayName !== undefined ? primaryCardDisplayName : (cardType === 'primary' ? cardDisplayName : undefined)
+    
+    if (targetPrimaryId !== undefined) updateData.primaryCardAccountId = targetPrimaryId
+    if (targetPrimaryName !== undefined) updateData.primaryCardDisplayName = targetPrimaryName
     if (statementClosingDay !== undefined) updateData.statementClosingDay = Number(statementClosingDay)
     if (paymentDueDay !== undefined) updateData.paymentDueDay = Number(paymentDueDay)
     if (lastStatementAmount !== undefined) updateData.lastStatementAmount = Number(lastStatementAmount)
 
-    // Secondary Card fields
+    // 3. Personal Secondary Card
     if (secondaryCardAccountId !== undefined) updateData.secondaryCardAccountId = secondaryCardAccountId
     if (secondaryCardDisplayName !== undefined) updateData.secondaryCardDisplayName = secondaryCardDisplayName
     if (secondaryStatementClosingDay !== undefined) updateData.secondaryStatementClosingDay = Number(secondaryStatementClosingDay)
     if (secondaryPaymentDueDay !== undefined) updateData.secondaryPaymentDueDay = Number(secondaryPaymentDueDay)
     if (secondaryLastStatementAmount !== undefined) updateData.secondaryLastStatementAmount = Number(secondaryLastStatementAmount)
 
-    if (isActive !== undefined) updateData.isActive = Boolean(isActive)
-
-    // Auto-resolve card names if cardAccountId changed
-    if (cardAccountId) {
+    // Auto-resolve card names if primaryCardAccountId changed
+    if (updateData.primaryCardAccountId) {
       const tokenData = await getValidAccessToken(familyId, 'primary')
       if (tokenData?.accessToken) {
         try {
           const cards = await getCards(tokenData.accessToken)
-          const matched = cards.find(c => c.account_id === cardAccountId)
+          const matched = cards.find(c => c.account_id === updateData.primaryCardAccountId)
           if (matched) {
-            if (matched.name_on_card) updateData.cardholderName = matched.name_on_card
-            if (matched.display_name && !cardDisplayName) updateData.cardDisplayName = matched.display_name
+            if (matched.name_on_card) updateData.primaryCardholderName = matched.name_on_card
+            if (matched.display_name && !targetPrimaryName) updateData.primaryCardDisplayName = matched.display_name
           }
         } catch (e) {
           console.warn('Could not lookup primary card name:', e.message)
@@ -390,12 +450,13 @@ router.post('/config', requireAuth, async (req, res) => {
       }
     }
 
-    if (secondaryCardAccountId) {
+    // Auto-resolve card names if secondaryCardAccountId changed
+    if (updateData.secondaryCardAccountId) {
       const tokenData = await getValidAccessToken(familyId, 'secondary')
       if (tokenData?.accessToken) {
         try {
           const cards = await getCards(tokenData.accessToken)
-          const matched = cards.find(c => c.account_id === secondaryCardAccountId)
+          const matched = cards.find(c => c.account_id === updateData.secondaryCardAccountId)
           if (matched) {
             if (matched.name_on_card) updateData.secondaryCardholderName = matched.name_on_card
             if (matched.display_name && !secondaryCardDisplayName) updateData.secondaryCardDisplayName = matched.display_name
@@ -430,26 +491,32 @@ router.post('/config', requireAuth, async (req, res) => {
 
 /**
  * GET /api/truelayer/live-monitor
- * Fetches real-time live spending metrics for Primary & Secondary cards,
- * minusing recurring credit card bills and tracking against set budget allowance.
+ * Fetches real-time live spending metrics for Personal Primary & Personal Secondary cards,
+ * completely decoupled from the shared household card.
  */
 router.get('/live-monitor', requireAuth, async (req, res) => {
   try {
     const familyId = req.user.familyId
     const userId = req.user.userId
 
-    const [cardMetrics, creditCardBills, user, manualSecondaryExpenses] = await Promise.all([
+    const [cardMetrics, creditCardRecurring, cardExpenses, user, manualSecondaryExpenses] = await Promise.all([
       fetchCardLiveMetrics(familyId),
       prisma.primaryCardRecurring.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } }),
+      prisma.budgetExpense.findMany({ 
+        where: { ownerId: userId, isPrimaryCard: true }, 
+        orderBy: [{ sortOrder: 'asc' }, { createdAt: 'asc' }] 
+      }),
       prisma.user.findUnique({ where: { id: userId }, select: { primaryCardAllowance: true } }),
       prisma.secondaryCardExpense.findMany({ where: { ownerId: userId }, orderBy: { createdAt: 'asc' } })
     ])
 
-    const totalCreditCardBills = creditCardBills.reduce((acc, b) => acc + (b.amount || 0), 0)
+    const totalRecurringBills = creditCardRecurring.reduce((acc, b) => acc + (b.amount || 0), 0)
+    const totalCardExpenses = cardExpenses.reduce((acc, e) => acc + (e.amount || 0), 0)
+    const totalCreditCardBills = totalRecurringBills + totalCardExpenses
     const totalManualPayments = manualSecondaryExpenses.reduce((acc, m) => acc + (m.amount || 0), 0)
     const budgetAllowance = user?.primaryCardAllowance || 0
 
-    // Net discretionary card spend = active card spend across both cards minus credit card bills
+    // Net discretionary card spend = active personal card spend across both cards minus credit card bills
     const netLiveCardSpend = Math.max(0, cardMetrics.totalLiveCardSpend - totalCreditCardBills)
     const totalSpendUsed = netLiveCardSpend + totalManualPayments
     const remainingBudget = budgetAllowance - totalSpendUsed
@@ -462,6 +529,10 @@ router.get('/live-monitor', requireAuth, async (req, res) => {
       secondaryCard: cardMetrics.secondaryCard,
       totalLiveCardSpend: cardMetrics.totalLiveCardSpend,
       totalCreditCardBills,
+      totalRecurringBills,
+      totalCardExpenses,
+      recurringBills: creditCardRecurring,
+      cardExpenses,
       netLiveCardSpend,
       manualPayments: totalManualPayments,
       totalSpendUsed,
@@ -480,7 +551,7 @@ router.get('/live-monitor', requireAuth, async (req, res) => {
 
 /**
  * POST /api/truelayer/sync-now
- * Runs an on-demand settlement sync for the authenticated user's family
+ * Runs an on-demand settlement sync for the shared household card
  */
 router.post('/sync-now', requireAuth, async (req, res) => {
   try {
@@ -495,7 +566,7 @@ router.post('/sync-now', requireAuth, async (req, res) => {
 
 /**
  * POST /api/truelayer/disconnect
- * Disconnects TrueLayer tokens: accepts cardType = 'primary' | 'secondary' | 'all'
+ * Disconnects TrueLayer tokens: accepts cardType = 'shared' | 'primary' | 'secondary' | 'all'
  */
 router.post('/disconnect', requireAuth, async (req, res) => {
   try {
@@ -510,17 +581,31 @@ router.post('/disconnect', requireAuth, async (req, res) => {
         secondaryTokenExpiresAt: null,
         secondaryConsentExpiresAt: null,
         secondaryCardAccountId: null,
+        secondaryCardholderName: null,
+        secondaryCardDisplayName: null,
       }
     } else if (cardType === 'primary') {
+      updateData = {
+        primaryAccessToken: null,
+        primaryRefreshToken: null,
+        primaryTokenExpiresAt: null,
+        primaryConsentExpiresAt: null,
+        primaryCardAccountId: null,
+        primaryCardholderName: null,
+        primaryCardDisplayName: null,
+      }
+    } else if (cardType === 'shared') {
       updateData = {
         accessToken: null,
         refreshToken: null,
         tokenExpiresAt: null,
         consentExpiresAt: null,
         cardAccountId: null,
+        cardholderName: null,
+        cardDisplayName: null,
         isActive: false,
         lastSyncStatus: 'DISCONNECTED',
-        lastSyncMessage: 'Disconnected Primary Card',
+        lastSyncMessage: 'Disconnected Shared Card',
       }
     } else {
       // all
@@ -530,6 +615,11 @@ router.post('/disconnect', requireAuth, async (req, res) => {
         tokenExpiresAt: null,
         consentExpiresAt: null,
         cardAccountId: null,
+        primaryAccessToken: null,
+        primaryRefreshToken: null,
+        primaryTokenExpiresAt: null,
+        primaryConsentExpiresAt: null,
+        primaryCardAccountId: null,
         secondaryAccessToken: null,
         secondaryRefreshToken: null,
         secondaryTokenExpiresAt: null,

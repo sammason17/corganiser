@@ -507,22 +507,30 @@ model SharedStatementExport {
 
 model CardAutomationConfig {
   id                         String    @id @default(cuid())
+  // Shared Settlement Card (Used strictly for SharedCreditCardStatementCalculator & settlement automation)
   accessToken                String?   @map("access_token")
   refreshToken               String?   @map("refresh_token")
   tokenExpiresAt             DateTime? @map("token_expires_at")
   consentExpiresAt           DateTime? @map("consent_expires_at")
-
-  // Primary Card
   cardAccountId              String?   @map("card_account_id")
   cardholderName             String?   @map("cardholder_name")
   cardDisplayName            String?   @map("card_display_name")
   supplementaryCardId        String?   @map("supplementary_card_id")
+
+  // Personal Primary Card (For Live Credit Card Budget Monitor)
+  primaryAccessToken         String?   @map("primary_access_token")
+  primaryRefreshToken        String?   @map("primary_refresh_token")
+  primaryTokenExpiresAt      DateTime? @map("primary_token_expires_at")
+  primaryConsentExpiresAt    DateTime? @map("primary_consent_expires_at")
+  primaryCardAccountId       String?   @map("primary_card_account_id")
+  primaryCardholderName      String?   @map("primary_cardholder_name")
+  primaryCardDisplayName     String?   @map("primary_card_display_name")
   statementClosingDay        Int       @default(19) @map("statement_closing_day")
   paymentDueDay              Int       @default(1) @map("payment_due_day")
   lastStatementAmount        Float     @default(0) @map("last_statement_amount")
   primaryLastKnownBalance    Float     @default(0) @map("primary_last_known_balance")
 
-  // Secondary Card (supports same provider or separate bank connection)
+  // Personal Secondary Card (For Live Credit Card Budget Monitor)
   secondaryAccessToken       String?   @map("secondary_access_token")
   secondaryRefreshToken      String?   @map("secondary_refresh_token")
   secondaryTokenExpiresAt    DateTime? @map("secondary_token_expires_at")

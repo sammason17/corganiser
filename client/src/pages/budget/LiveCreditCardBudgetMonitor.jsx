@@ -15,6 +15,7 @@ export default function LiveCreditCardBudgetMonitor({
 }) {
   const [metrics, setMetrics] = useState(null);
   const [creditCardBills, setCreditCardBills] = useState([]);
+  const [cardExpenses, setCardExpenses] = useState([]);
   const [manualPayments, setManualPayments] = useState([]);
   const [loading, setLoading] = useState(true);
   const [isSyncing, setIsSyncing] = useState(false);
@@ -58,6 +59,7 @@ export default function LiveCreditCardBudgetMonitor({
       ]);
       setMetrics(monitorData);
       setCreditCardBills(budgetAll.primaryCardRecurring || budgetAll.cardRecurring || []);
+      setCardExpenses((budgetAll.expenses || []).filter(e => e.isPrimaryCard || e.isCreditCard));
       setManualPayments(budgetAll.secondaryCardExpenses || budgetAll.secondaryCards || []);
       if (budgetAll.primaryCardAllowance !== undefined) {
         setAllowanceInput(budgetAll.primaryCardAllowance);
@@ -230,8 +232,8 @@ export default function LiveCreditCardBudgetMonitor({
     e.preventDefault();
     try {
       await api.updateTrueLayerConfig({
-        cardAccountId: configForm.cardAccountId || null,
-        cardDisplayName: configForm.cardDisplayName,
+        primaryCardAccountId: configForm.cardAccountId || null,
+        primaryCardDisplayName: configForm.cardDisplayName,
         statementClosingDay: Number(configForm.statementClosingDay) || 19,
         paymentDueDay: Number(configForm.paymentDueDay) || 1,
         lastStatementAmount: Number(configForm.lastStatementAmount) || 0,
@@ -590,8 +592,40 @@ export default function LiveCreditCardBudgetMonitor({
               Fixed recurring subscriptions or bills paid on your credit card. These are subtracted from your live balance so only discretionary spending counts against your budget.
             </p>
 
-            <div className="space-y-2 mb-4 max-h-56 overflow-y-auto pr-1">
-              {creditCardBills.length === 0 ? (
+            <div className="space-y-2 mb-4 max-h-64 overflow-y-auto pr-1">
+              {/* Flagged Monthly Expenses from Budget */}
+              {cardExpenses?.length > 0 && (
+                <>
+                  <div className="text-[9px] font-black uppercase tracking-wider text-indigo-300/80 pt-1 pb-1 flex items-center justify-between">
+                    <span>Monthly Expenses (Card-Flagged)</span>
+                    <span className="font-mono text-[10px] text-indigo-300">
+                      -{formatCurrency(cardExpenses.reduce((s, e) => s + (e.amount || 0), 0))}
+                    </span>
+                  </div>
+                  {cardExpenses.map((e) => (
+                    <div key={e.id} className="flex items-center justify-between group border-b border-white/5 pb-2 opacity-85">
+                      <div className="flex items-center gap-2 truncate pr-2">
+                        <span className="text-[8px] font-black uppercase tracking-widest text-indigo-400 bg-indigo-400/10 px-1.5 py-0.5 rounded shrink-0">
+                          Expense
+                        </span>
+                        <span className="text-xs font-bold text-indigo-100 truncate">{e.name}</span>
+                      </div>
+                      <span className="font-mono text-xs font-bold text-white shrink-0">
+                        -{formatCurrency(e.amount)}
+                      </span>
+                    </div>
+                  ))}
+                  <div className="text-[9px] font-black uppercase tracking-wider text-indigo-300/80 pt-3 pb-1 border-t border-white/10 flex items-center justify-between">
+                    <span>Recurring Card Subscriptions</span>
+                    <span className="font-mono text-[10px] text-indigo-300">
+                      -{formatCurrency(creditCardBills.reduce((s, b) => s + (b.amount || 0), 0))}
+                    </span>
+                  </div>
+                </>
+              )}
+
+              {/* Recurring Card Subscriptions */}
+              {creditCardBills.length === 0 && (!cardExpenses || cardExpenses.length === 0) ? (
                 <p className="text-xs text-slate-500 italic py-2">No credit card bills logged yet.</p>
               ) : (
                 creditCardBills.map((b) => (
