@@ -182,7 +182,7 @@ Track and simulate payoff schedules across multiple credit cards and balance tra
     - **Fixed day of month**: Statement closes on a specific day each month (e.g. 19th).
     - **Days before payment date**: Statement closing day is calculated relative to payment due date (e.g. 14 days prior).
     - Purchases on or before closing date count towards that statement; spending from the next day rolls into the new cycle.
-  - **Statement Gap Deduction**: Automatically subtracts unpaid previous statement amounts from live bank balances during the closing-to-payment gap window.
+  - **Transaction-Derived Active Spend & Gap Deduction**: Automatically queries transactions made in the active cycle to calculate exact day-to-day spend, and derives the unpaid statement amount awaiting Direct Debit (`Total Balance − Active Cycle Spend`) to prevent double-counting.
   - **Credit Card Bills Deduction**: Automatically deducts recurring card subscriptions and card-flagged monthly expenses from live balances.
   - **Overspend alerts**: Visual spend velocity bar and banner alert when discretionary spend exceeds allowance.
 

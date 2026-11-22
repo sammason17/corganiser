@@ -53,8 +53,9 @@ A personal and family life organiser built with React, Node/Express, and Postgre
     - **Fixed day of month**: Statement closes on a designated calendar day (e.g. 19th of each month).
     - **Days before payment date**: Statement closing day dynamically calculates relative to payment due date (e.g. 14 days prior to payment day).
     - Purchases on or before the closing date count towards that statement; spending from the next day forward rolls into the active cycle.
-  - **Automatic Statement Gap Deduction**:
-    - During the gap window between statement close and Direct Debit clearance, unpaid previous statement amounts are automatically deducted from the bank's live balance to prevent inflating current-cycle spend.
+  - **Transaction-Derived Active Spend & Gap Deduction**:
+    - Automatically queries live TrueLayer transactions within the active cycle (from the day after closing date to today) to measure true day-to-day spend.
+    - During the statement gap window, the unpaid statement awaiting Direct Debit is automatically calculated (`Total Balance − Active Cycle Spend`) and deducted so previous cycle charges never inflate current spending.
   - **Credit Card Bills Deduction**:
     - Fixed card subscriptions (e.g. streaming, software) and card-flagged monthly expenses are deducted from live balances so only discretionary day-to-day purchases count towards your budget.
   - **Additive Manual Spend Pot**: Track additional cash/debit payments or external card spending that counts toward your allowance.

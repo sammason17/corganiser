@@ -496,7 +496,7 @@ export default function LiveCreditCardBudgetMonitor({
               <div className="flex justify-between items-baseline">
                 <span className="text-xs text-slate-400 font-medium">TrueLayer Live Balance</span>
                 <span className="font-mono text-xl font-bold text-white">
-                  {formatCurrency(primary?.rawBalance)}
+                  {formatCurrency(Math.abs(primary?.rawBalance || 0))}
                 </span>
               </div>
 
@@ -527,7 +527,12 @@ export default function LiveCreditCardBudgetMonitor({
 
                 {primary?.cycleStartFormatted && primary?.cycleEndFormatted && (
                   <div className="flex items-center justify-between text-[10px] text-indigo-300/80 bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                    <span>Active Cycle: <strong className="text-white font-mono">{primary.cycleStartFormatted} → {primary.cycleEndFormatted}</strong></span>
+                    <span>
+                      Active Cycle: <strong className="text-white font-mono">{primary.cycleStartFormatted} → {primary.cycleEndFormatted}</strong>
+                      {primary.transactionsCount !== undefined && (
+                        <span className="ml-1 text-slate-400">({primary.transactionsCount} purchase{primary.transactionsCount === 1 ? '' : 's'})</span>
+                      )}
+                    </span>
                     <span className="text-indigo-300/60 font-medium">
                       {primary.statementDateType === 'DAYS_BEFORE_PAYMENT' 
                         ? `${primary.statementDaysBeforePayment || 14} days prior` 
@@ -584,7 +589,7 @@ export default function LiveCreditCardBudgetMonitor({
               <div className="flex justify-between items-baseline">
                 <span className="text-xs text-slate-400 font-medium">TrueLayer Live Balance</span>
                 <span className="font-mono text-xl font-bold text-white">
-                  {formatCurrency(secondary?.rawBalance)}
+                  {formatCurrency(Math.abs(secondary?.rawBalance || 0))}
                 </span>
               </div>
 
@@ -615,7 +620,12 @@ export default function LiveCreditCardBudgetMonitor({
 
                 {secondary?.cycleStartFormatted && secondary?.cycleEndFormatted && (
                   <div className="flex items-center justify-between text-[10px] text-purple-300/80 bg-white/5 px-2.5 py-1 rounded-md border border-white/5">
-                    <span>Active Cycle: <strong className="text-white font-mono">{secondary.cycleStartFormatted} → {secondary.cycleEndFormatted}</strong></span>
+                    <span>
+                      Active Cycle: <strong className="text-white font-mono">{secondary.cycleStartFormatted} → {secondary.cycleEndFormatted}</strong>
+                      {secondary.transactionsCount !== undefined && (
+                        <span className="ml-1 text-slate-400">({secondary.transactionsCount} purchase{secondary.transactionsCount === 1 ? '' : 's'})</span>
+                      )}
+                    </span>
                     <span className="text-purple-300/60 font-medium">
                       {secondary.statementDateType === 'DAYS_BEFORE_PAYMENT' 
                         ? `${secondary.statementDaysBeforePayment || 14} days prior` 
